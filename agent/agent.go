@@ -89,12 +89,14 @@ func (ka *KwsToHttpxAgent) srcHandleFunc(packet gch.Packet) error {
 					return err
 				}
 				glog.Info("params:", ka.clientConf.Params)
-				dstCh, err := strap.DialWs(ka.clientConf, handle)
+				wsClient := strap.NewWsClient(ka.clientConf, handle)
+				err = wsClient.Start()
 				if err != nil {
 					glog.Info("dialws error, srcChId:" + srcChId)
 					return err
 				}
 				// 拨号成功，记录
+				dstCh := wsClient.GetChannel()
 				dstChId := dstCh.GetChId()
 				ka.dstChannels[srcChId] = dstCh
 				ka.srcChannels[dstChId] = srcCh
