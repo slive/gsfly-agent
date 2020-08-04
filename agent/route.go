@@ -3,15 +3,25 @@
  * Author:slive
  * DATE:2020/8/2
  */
-package route
+package agent
 
-import "gsfly/bootstrap"
+import (
+	"gsfly/bootstrap"
+	"gsfly/channel"
+)
 
 type Route interface {
-	DoRoute() bootstrap.ClientConf
+	Select() *bootstrap.ClientConf
+
+	Query() *channel.Channel
 }
 
 type BaseRoute struct {
+
+}
+
+func (br *BaseRoute) DoRoute() *bootstrap.ClientConf{
+	return  nil
 }
 
 type WeightRoute struct {
