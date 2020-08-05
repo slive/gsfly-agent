@@ -11,7 +11,7 @@ import (
 )
 
 type Route interface {
-	Select() *bootstrap.ClientConf
+	Select() *bootstrap.BaseClientConf
 
 	Query() *channel.Channel
 }
@@ -20,7 +20,7 @@ type BaseRoute struct {
 
 }
 
-func (br *BaseRoute) DoRoute() *bootstrap.ClientConf{
+func (br *BaseRoute) DoRoute() *bootstrap.BaseClientConf {
 	return  nil
 }
 

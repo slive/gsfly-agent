@@ -5,21 +5,15 @@
 package agent
 
 import (
-	"encoding/json"
-	"errors"
-	"github.com/gorilla/websocket"
 	logx "github.com/sirupsen/logrus"
 	strap "gsfly/bootstrap"
 	gch "gsfly/channel"
-	gws "gsfly/channel/tcp/ws"
-	gkcp "gsfly/channel/udp/kcp"
 	glog "gsfly/logger"
 	"math/rand"
-	"unsafe"
 )
 
 // agent
-//  server
+//  Server
 //      network
 //      listen
 //      config
@@ -32,145 +26,160 @@ import (
 //      upstream
 
 type Agent interface {
+	GetId() string
+	GetServerConf() strap.ServerConf
+	GetClientConf(clienId string) strap.ClientConf
+	GetClientConfs() []strap.ClientConf
+	Start() error
+	Stop()
+
+	IsClosed() bool
+
+	// GetServer() strap.Server
+	// GetDstChannels() map[string]gch.Channel
+	// GetDstChannel(srcChId string) gch.Channel
+	// AddDstChannel(srcChId string, dstChannel gch.Channel) gch.Channel
+	// DelDstChannel(srcChId string)
+	//
+	// GetSrcChannels() map[string]gch.Channel
+	// GetSrcChannel(dstChId string) gch.Channel
+	// AddSrcChannel(dstChId string, srcChannel gch.Channel)
+	// DelSrcChannel(dstChId string) gch.Channel
 }
 
 type BaseAgent struct {
-	serverConf    *strap.KcpServerConf
-	clientConfMap map[string]*strap.ClientConf
-	clientConfs   []*strap.ClientConf
-	dstChannels   map[string]gch.Channel
-	srcChannels   map[string]gch.Channel
+	Server        strap.Server
+	ServerConf    strap.ServerConf
+	ClientConfMap map[string]strap.ClientConf
+	ClientConfs   []strap.ClientConf
+	DstChannels   map[string]gch.Channel
+	SrcChannels   map[string]gch.Channel
 	// 路由规则
 	SelectHandle SelectHandle
 	QueryHandle  QueryHandle
+	Closed       bool
 }
 
-type KwsToHttpxAgent struct {
-	BaseAgent
-	serverConf    *strap.KcpServerConf
-	clientConfMap map[string]*strap.WsClientConf
-	clientConfs   []*strap.WsClientConf
-}
-
-func KwsToHttpx(serverConf *strap.KcpServerConf, clientConfs ...*strap.WsClientConf) {
-	kh := &KwsToHttpxAgent{
-		serverConf:    serverConf,
-		clientConfMap: make(map[string]*strap.WsClientConf, len(clientConfs)),
+func NewBaseAgent(serverConf strap.ServerConf, selectHandle SelectHandle, clientConfs ...strap.ClientConf) *BaseAgent {
+	kh := &BaseAgent{
+		ServerConf: serverConf,
+		Closed:     true,
 	}
-	kh.dstChannels = make(map[string]gch.Channel, 100)
-	kh.srcChannels = make(map[string]gch.Channel, 100)
-	kh.clientConfs = clientConfs
+
+	clen := len(clientConfs)
+	kh.ClientConfs = clientConfs
+	kh.ClientConfMap = make(map[string]strap.ClientConf, clen)
 	for _, cc := range clientConfs {
-		kh.clientConfMap[cc.GetAddrStr()] = cc
+		kh.ClientConfMap[cc.GetAddrStr()] = cc
 	}
 
-	kh.SelectHandle = DefalutSelectHandle
-
-	handleFunc := kh.srcHandleFunc
-	// TODO 加密
-	chHandle := gch.NewChHandle(handleFunc, nil, kh.srcCloseFunc)
-	server := strap.NewKcpServer(serverConf, chHandle)
-	server.Start()
+	// 初始化
+	kh.DstChannels = make(map[string]gch.Channel, 100)
+	kh.SrcChannels = make(map[string]gch.Channel, 100)
+	if selectHandle == nil {
+		kh.SelectHandle = DefalutSelectHandle
+	} else {
+		kh.SelectHandle = selectHandle
+	}
+	return kh
 }
 
-func (ka *KwsToHttpxAgent) srcCloseFunc(channel gch.Channel) error {
+func (ag *BaseAgent) GetId() string {
+	return "agent:" + ag.ServerConf.GetAddrStr()
+}
+
+func (ag *BaseAgent) GetServerConf() strap.ServerConf {
+	return ag.ServerConf
+}
+func (ag *BaseAgent) GetClientConf(clienId string) strap.ClientConf {
+	return ag.ClientConfMap[clienId]
+}
+func (ag *BaseAgent) GetClientConfs() []strap.ClientConf {
+	return ag.ClientConfs
+}
+
+func (ag *BaseAgent) Start() error {
+	panic("unsupport")
+}
+
+func (ag *BaseAgent) Stop() {
+	id := ag.GetId()
+	if ag.IsClosed() {
+		logx.Info("had close agent, id:", id)
+		return
+	}
+
+	defer func() {
+		ret := recover()
+		if ret != nil {
+			logx.Errorf("finish to close agent, id:%v, msg:%v", id, ret)
+		} else {
+			logx.Info("finish to close agent, id:", id)
+		}
+	}()
+	logx.Info("start to close agent, id:", id)
+	dstChannels := ag.DstChannels
+	if dstChannels != nil {
+		for key, ch := range dstChannels {
+			ch.StopChannel(ch)
+			delete(dstChannels, key)
+		}
+	}
+
+	srcChannels := ag.SrcChannels
+	if srcChannels != nil {
+		for key, ch := range srcChannels {
+			ch.StopChannel(ch)
+			delete(srcChannels, key)
+		}
+	}
+	server := ag.Server
+	if server != nil {
+		server.Stop()
+	}
+}
+
+func (ag *BaseAgent) IsClosed() bool {
+	return ag.Closed
+}
+
+func (ka *BaseAgent) SrcCloseFunc(channel gch.Channel) error {
 	// 错误处理
 	id := channel.GetChId()
 	glog.Info("do srcclose, chId:", id)
-	dstChannel := ka.dstChannels[id]
+	dstChannel := ka.DstChannels[id]
 	dstChannel.StopChannel(dstChannel)
-	return nil
-}
-
-func (ka *KwsToHttpxAgent) srcHandleFunc(packet gch.Packet) error {
-	defer func() {
-		err := recover()
-		if err != nil {
-			glog.Error("handle error:", err)
-		}
-	}()
-	srcCh := packet.GetChannel()
-	// 强制转换处理
-	kwsPacket, ok := packet.(*gkcp.KwsPacket)
-	if ok {
-		frame := kwsPacket.Frame
-		if frame != nil {
-			srcChId := srcCh.GetChId()
-			// 第一次建立会话时进行处理
-			if frame.GetOpCode() == gkcp.OPCODE_TEXT_SESSION {
-				handle := gch.NewChHandle(ka.dstHandleFunc, nil, ka.dstCloseFunc)
-				clientConf := ka.SelectHandle(ka)
-				wsClientConf := (*strap.WsClientConf)(unsafe.Pointer(clientConf))
-				err := json.Unmarshal(frame.GetPayload(), &wsClientConf.Params)
-				if err != nil {
-					glog.Debug("params error:", err)
-					return err
-				}
-				glog.Info("params:", wsClientConf.Params)
-				wsClient := strap.NewWsClient(wsClientConf, handle)
-				err = wsClient.Start()
-				if err != nil {
-					glog.Info("dialws error, srcChId:" + srcChId)
-					return err
-				}
-				// 拨号成功，记录
-				dstCh := wsClient.GetChannel()
-				dstChId := dstCh.GetChId()
-				ka.dstChannels[srcChId] = dstCh
-				ka.srcChannels[dstChId] = srcCh
-				glog.Info("dstChId:" + dstChId + ", srcChId:" + srcChId)
-				return err
-			} else {
-				dstCh := ka.dstChannels[srcChId]
-				if dstCh != nil {
-					dstPacket := dstCh.NewPacket().(*gws.WsPacket)
-					dstPacket.SetData(frame.GetPayload())
-					dstPacket.MsgType = websocket.TextMessage
-					dstCh.Write(dstPacket)
-				}
-			}
-		} else {
-			glog.Info("frame is nil")
-		}
-	} else {
-		// TODO ?
+	if dstChannel != nil {
+		dstChannel.StopChannel(dstChannel)
+		delete(ka.DstChannels, id)
+		delete(ka.SrcChannels, dstChannel.GetChId())
 	}
 	return nil
 }
 
-func (ka *KwsToHttpxAgent) dstHandleFunc(packet gch.Packet) error {
-	dstChId := packet.GetChannel().GetChId()
-	srcCh := ka.srcChannels[dstChId]
-	if srcCh != nil {
-		// 回写
-		frame := gkcp.NewOutputFrame(gkcp.OPCODE_TEXT_SIGNALLING, packet.GetData())
-		srcPacket := srcCh.NewPacket()
-		srcPacket.SetData(frame.GetKcpData())
-		srcCh.Write(srcPacket)
-		return nil
-	} else {
-		return errors.New("src channel is nil, dst channel id:" + dstChId)
-	}
-}
-
-func (ka *KwsToHttpxAgent) dstCloseFunc(channel gch.Channel) error {
+func (ka *BaseAgent) DstCloseFunc(channel gch.Channel) error {
 	// 错误处理
 	id := channel.GetChId()
 	glog.Info("do dstclose, chId:", id)
-	srcChannel := ka.srcChannels[id]
-	srcChannel.StopChannel(srcChannel)
+	srcChannel := ka.SrcChannels[id]
+	if srcChannel != nil {
+		srcChannel.StopChannel(srcChannel)
+		delete(ka.SrcChannels, id)
+		delete(ka.DstChannels, srcChannel.GetChId())
+	}
+
 	return nil
 }
 
-func DefalutSelectHandle(agent Agent) *strap.WsClientConf {
-	k := agent.(*KwsToHttpxAgent)
-	ccLen := len(k.clientConfs)
+func DefalutSelectHandle(agent Agent) strap.ClientConf {
+	confs := agent.GetClientConfs()
+	ccLen := len(confs)
 	rand := rand.Int() % ccLen
-	conf := k.clientConfs[rand]
+	conf := confs[rand]
 	logx.Infof("rand:%v, conf:%v", rand, conf)
 	return conf
 }
 
-type SelectHandle func(agent Agent) *strap.WsClientConf
+type SelectHandle func(agent Agent) strap.ClientConf
 
-type QueryHandle func(agent Agent, client *strap.WsClientConf) strap.Client
+type QueryHandle func(agent Agent, client strap.ClientConf) strap.Client
