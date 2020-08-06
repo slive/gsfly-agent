@@ -56,7 +56,6 @@ type BaseAgent struct {
 	SrcChannels   map[string]gch.Channel
 	// 路由规则
 	SelectHandle SelectHandle
-	QueryHandle  QueryHandle
 	Closed       bool
 }
 
@@ -158,7 +157,7 @@ func (ka *BaseAgent) SrcCloseFunc(channel gch.Channel) error {
 }
 
 func (ka *BaseAgent) DstCloseFunc(channel gch.Channel) error {
-	// 错误处理
+	// 当目标channel关闭时，触发源地址关闭
 	id := channel.GetChId()
 	glog.Info("do dstclose, chId:", id)
 	srcChannel := ka.SrcChannels[id]
