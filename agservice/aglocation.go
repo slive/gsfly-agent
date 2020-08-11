@@ -4,29 +4,32 @@
  */
 package agservice
 
+// AgLocation 代理定位接口， 通过location定位到对应的route
 type AgLocation interface {
 	GetPattern() string
 
-	GetUpstreamName() string
+	GetRouteName() string
 }
 
 type BaseAgLocation struct {
-	Pattern      string
-	UpstreamName string
+	Pattern   string
+	RouteName string
 }
 
-func NewBaseAgLocation(pattern string, upstreamName string) AgLocation {
+func NewBaseAgLocation(pattern string, routeName string) AgLocation {
 	b := &BaseAgLocation{
-		Pattern:      pattern,
-		UpstreamName: upstreamName,
+		Pattern:   pattern,
+		RouteName: routeName,
 	}
 	return b
 }
 
+// GetPattern 匹配规则，可支持模糊匹配
 func (agl *BaseAgLocation) GetPattern() string {
 	return agl.Pattern
 }
 
-func (agl *BaseAgLocation) GetUpstreamName() string {
-	return agl.UpstreamName
+// GetRouteName 获取到的route名称
+func (agl *BaseAgLocation) GetRouteName() string {
+	return agl.RouteName
 }

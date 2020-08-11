@@ -1,18 +1,15 @@
 /*
+ * 代理服务类
  * Author:slive
  * DATE:2020/8/6
  */
 package agservice
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/gorilla/websocket"
 	"gsfly/bootstrap"
 	gch "gsfly/channel"
-	gws "gsfly/channel/tcp/ws"
-	gkcp "gsfly/channel/udp/kcp"
 	logx "gsfly/logger"
 )
 
@@ -23,9 +20,9 @@ type AgService interface {
 
 	GetClientRelServerChannels() map[string]gch.Channel
 
-	GetAgUpstreams() map[string]AgUpstream
+	GetAgRoutes() map[string]AgRoute
 
-	GetServerRelClients() map[string]bootstrap.Client
+	GetServerRelClients() map[string]bootstrap.ClientStrap
 
 	Start() error
 	Stop()
@@ -40,16 +37,16 @@ type BaseAgService struct {
 	// key为client的id，值为server产生的channel
 	ClientRelServerChannels map[string]gch.Channel
 
-	AgUpstreams map[string]AgUpstream
+	AgRoutes map[string]AgRoute
 
 	// server服务器产生的channel和维护upstream产生的client关系
 	// key为server产生的channel的id，值为client
-	ServerRelClients map[string]bootstrap.Client
+	ServerRelClients map[string]bootstrap.ClientStrap
 
 	Closed bool
 }
 
-func NewBaseAgService(agServer AgServer, agUpstreams ...AgUpstream) *BaseAgService {
+func NewBaseAgService(agServer AgServer, agUpstreams ...AgRoute) *BaseAgService {
 	uLen := len(agUpstreams)
 	if uLen <= 0 {
 		panic("upstream is nil")
@@ -57,12 +54,12 @@ func NewBaseAgService(agServer AgServer, agUpstreams ...AgUpstream) *BaseAgServi
 	b := &BaseAgService{AgServer: agServer}
 	b.Closed = true
 	b.ClientRelServerChannels = make(map[string]gch.Channel, 10)
-	b.ServerRelClients = make(map[string]bootstrap.Client, 10)
-	ups := make(map[string]AgUpstream, uLen)
+	b.ServerRelClients = make(map[string]bootstrap.ClientStrap, 10)
+	ups := make(map[string]AgRoute, uLen)
 	for _, up := range agUpstreams {
 		ups[up.GetName()] = up
 	}
-	b.AgUpstreams = ups
+	b.AgRoutes = ups
 	return b
 }
 
@@ -78,11 +75,11 @@ func (b *BaseAgService) GetClientRelServerChannels() map[string]gch.Channel {
 	return b.ClientRelServerChannels
 }
 
-func (b *BaseAgService) GetAgUpstreams() map[string]AgUpstream {
-	return b.AgUpstreams
+func (b *BaseAgService) GetAgRoutes() map[string]AgRoute {
+	return b.AgRoutes
 }
 
-func (b *BaseAgService) GetServerRelClients() map[string]bootstrap.Client {
+func (b *BaseAgService) GetServerRelClients() map[string]bootstrap.ClientStrap {
 	return b.ServerRelClients
 }
 
@@ -116,16 +113,16 @@ func Start(service AgService) error {
 	case gch.PROTOCOL_HTTP:
 		break
 	case gch.PROTOCOL_KWS00:
-		hx := service.(*httpxService)
-		handleFunc := hx.HandleServerChannelMsg
-		chHandle := gch.NewChHandle(handleFunc, nil, hx.HandleServerChannelClose)
-		agServer := hx.AgServer.(*BaseAgServer)
-		server := bootstrap.NewKcpServer(agServer.GetServerConf().(*bootstrap.KcpServerConf), chHandle)
-		err := server.Start()
-		if err == nil {
-			agServer.Server = server
-		}
-		return err
+		// hx := service.(*httpxService)
+		// handleFunc := hx.serverChannelMsgHandle
+		// chHandle := gch.NewChHandle(handleFunc, nil, hx.onAgentChannelStopHandle)
+		// agServer := hx.AgServer.(*BaseAgServer)
+		// server := bootstrap.NewKcpServer(agServer.GetServerConf().(*bootstrap.KcpServerConf), chHandle)
+		// err := server.Start()
+		// if err == nil {
+		// 	agServer.ServerStrap = server
+		// }
+		return nil
 	case gch.PROTOCOL_KCP:
 		break
 	case gch.PROTOCOL_TCP:
@@ -159,7 +156,7 @@ func (ag *BaseAgService) Stop() {
 	dstChannels := ag.GetClientRelServerChannels()
 	if dstChannels != nil {
 		for key, ch := range dstChannels {
-			ch.StopChannel(ch)
+			ch.Stop()
 			delete(dstChannels, key)
 		}
 	}
@@ -180,139 +177,41 @@ func (b *BaseAgService) IsClosed() bool {
 	return b.Closed
 }
 
-// HandleServerChannelClose 当serverChannel关闭时，触发clientchannel关闭
-func (b *BaseAgService) HandleServerChannelClose(serverChannel gch.Channel) error {
-	serverChId := serverChannel.GetChId()
+// onAgentChannelStopHandle 当serverChannel关闭时，触发clientchannel关闭
+func (b *BaseAgService) onAgentChannelStopHandle(agentChannel gch.Channel) error {
+	agentChId := agentChannel.GetId()
 	defer func() {
 		ret := recover()
-		logx.Infof("finish to HandleClientChannelClose, chId:%v, ret:%v", serverChId, ret)
+		logx.Infof("finish to OnDstChannelStopHandle, chId:%v, ret:%v", agentChId, ret)
 	}()
-	logx.Info("start to HandleServerChannelClose, chId:", serverChId)
+
+	logx.Info("start to onAgentChannelStopHandle, chId:", agentChId)
 	serverRelClients := b.GetServerRelClients()
-	dstClient := serverRelClients[serverChId]
+	dstClient := serverRelClients[agentChId]
 	if dstClient != nil {
-		delete(serverRelClients, serverChId)
-		delete(b.GetClientRelServerChannels(), dstClient.GetChannel().GetChId())
+		delete(serverRelClients, agentChId)
+		delete(b.GetClientRelServerChannels(), dstClient.GetChannel().GetId())
 		dstClient.Stop()
 	}
 	return nil
 }
 
-// HandleClientChannelClose 当clientchannel关闭时，触发serverchannel关闭
-func (b *BaseAgService) HandleClientChannelClose(clientChannel gch.Channel) error {
-	clientChId := clientChannel.GetChId()
+// OnDstChannelStopHandle 当dstchannel关闭时，触发agentchannel关闭
+func (b *BaseAgService) OnDstChannelStopHandle(dstChannel gch.Channel) error {
+	dstChId := dstChannel.GetId()
 	defer func() {
 		ret := recover()
-		logx.Infof("finish to HandleClientChannelClose, chId:%v, ret:%v", clientChId, ret)
+		logx.Infof("finish to OnDstChannelStopHandle, chId:%v, ret:%v", dstChId, ret)
 	}()
+
 	// 当clientchannel关闭时，触发serverchannel关闭
-	logx.Info("start to HandleClientChannelClose, chId:", clientChId)
+	logx.Info("start to OnDstChannelStopHandle, chId:", dstChId)
 	clientRelServerChannels := b.GetClientRelServerChannels()
-	serverChannel := clientRelServerChannels[clientChId]
+	serverChannel := clientRelServerChannels[dstChId]
 	if serverChannel != nil {
-		serverChannel.StopChannel(serverChannel)
-		delete(clientRelServerChannels, clientChId)
-		delete(b.GetServerRelClients(), serverChannel.GetChId())
+		serverChannel.Stop()
+		delete(clientRelServerChannels, dstChId)
+		delete(b.GetServerRelClients(), serverChannel.GetId())
 	}
 	return nil
-}
-
-type httpxService struct {
-	BaseAgService
-}
-
-func NewHttpxAgService(agServer AgServer, agUpstreams ...AgUpstream) *httpxService {
-	b := &httpxService{}
-	b.BaseAgService = *NewBaseAgService(agServer, agUpstreams...)
-	return b
-}
-
-func (hx *httpxService) Start() error {
-	return Start(hx)
-}
-
-func (hx *httpxService) HandleServerChannelMsg(packet gch.Packet) error {
-	defer func() {
-		err := recover()
-		if err != nil {
-			logx.Error("handle error:", err)
-		}
-	}()
-	srcCh := packet.GetChannel()
-	// 强制转换处理
-	kwsPacket, ok := packet.(*gkcp.KwsPacket)
-	if ok {
-		frame := kwsPacket.Frame
-		if frame != nil {
-			srcChId := srcCh.GetChId()
-			// 第一次建立会话时进行处理
-			if frame.GetOpCode() == gkcp.OPCODE_TEXT_SESSION {
-				// 步骤：先获取location->获取到upstream->执行负载均衡算法->获取到clientconf
-				params := make(map[string] interface{})
-				err := json.Unmarshal(frame.GetPayload(), &params)
-				if err != nil {
-					logx.Debug("params error:", err)
-					return err
-				}
-				logx.Info("hangup params:",params)
-
-				localPattern := params["url"]
-				handleLocation := hx.AgServer.GetHandleLocation()
-				location := handleLocation(hx.GetAgServer(), localPattern)
-
-				upstreamName := location.GetUpstreamName()
-				agUpstream := hx.GetAgUpstreams()[upstreamName]
-				handleBalance := agUpstream.GetHandleLoadBalance()
-				clientConf := handleBalance(agUpstream)
-
-				handle := gch.NewChHandle(hx.HandleClientChannelMsg, nil, hx.HandleClientChannelClose)
-				wsClientConf := clientConf.(*bootstrap.WsClientConf)
-				// err := json.Unmarshal(frame.GetPayload(), &wsClientConf.Params)
-				wsClientConf.Params = params
-
-				logx.Info("params:", wsClientConf.Params)
-				wsClient := bootstrap.NewWsClient(wsClientConf, handle)
-				err = wsClient.Start()
-				if err != nil {
-					logx.Info("dialws error, srcChId:" + srcChId)
-					return err
-				}
-				// 拨号成功，记录
-				dstCh := wsClient.GetChannel()
-				dstChId := dstCh.GetChId()
-				hx.GetServerRelClients()[srcChId] = wsClient
-				hx.GetClientRelServerChannels()[dstChId] = srcCh
-				logx.Info("dstChId:" + dstChId + ", srcChId:" + srcChId)
-				return err
-			} else {
-				dstCh := hx.GetServerRelClients()[srcChId].GetChannel()
-				if dstCh != nil {
-					dstPacket := dstCh.NewPacket().(*gws.WsPacket)
-					dstPacket.SetData(frame.GetPayload())
-					dstPacket.MsgType = websocket.TextMessage
-					dstCh.Write(dstPacket)
-				}
-			}
-		} else {
-			logx.Info("frame is nil")
-		}
-	} else {
-		// TODO ?
-	}
-	return nil
-}
-
-func (hx *httpxService) HandleClientChannelMsg(packet gch.Packet) error {
-	dstChId := packet.GetChannel().GetChId()
-	srcCh := hx.GetClientRelServerChannels()[dstChId]
-	if srcCh != nil {
-		// 回写
-		frame := gkcp.NewOutputFrame(gkcp.OPCODE_TEXT_SIGNALLING, packet.GetData())
-		srcPacket := srcCh.NewPacket()
-		srcPacket.SetData(frame.GetKcpData())
-		srcCh.Write(srcPacket)
-		return nil
-	} else {
-		return errors.New("src channel is nil, dst channel id:" + dstChId)
-	}
 }

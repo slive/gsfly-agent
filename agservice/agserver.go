@@ -10,7 +10,7 @@ import (
 )
 
 type AgServer interface {
-	GetServer() bootstrap.Server
+	GetServer() bootstrap.ServerStrap
 
 	GetServerConf() bootstrap.ServerConf
 
@@ -18,27 +18,28 @@ type AgServer interface {
 
 	GetLocations() []AgLocation
 
-	GetHandleLocation() HandleLocation
+	GetLocationHandle() LocationHandle
 }
 
 type BaseAgServer struct {
-	Server     bootstrap.Server
+	Server     bootstrap.ServerStrap
 	ServerConf bootstrap.ServerConf
 
 	LocationMap map[string]AgLocation
 	Locations   []AgLocation
+
 	// 处理location选择
-	HandleLocation HandleLocation
+	LocationHandle LocationHandle
 }
 
-func NewBaseAgServer(serverConf bootstrap.ServerConf, handleLocation HandleLocation, locations... AgLocation) *BaseAgServer {
+func NewBaseAgServer(serverConf bootstrap.ServerConf, locationHandle LocationHandle, locations ...AgLocation) *BaseAgServer {
 	b := &BaseAgServer{ServerConf: serverConf}
 
-	if handleLocation != nil {
-		b.HandleLocation = handleLocation
+	if locationHandle != nil {
+		b.LocationHandle = locationHandle
 	} else {
 		// 使用默认location
-		b.HandleLocation = defaultHandleLocation
+		b.LocationHandle = defaultLocationHandle
 	}
 
 	llen := len(locations)
@@ -52,7 +53,7 @@ func NewBaseAgServer(serverConf bootstrap.ServerConf, handleLocation HandleLocat
 	return b
 }
 
-func (bg *BaseAgServer) GetServer() bootstrap.Server {
+func (bg *BaseAgServer) GetServer() bootstrap.ServerStrap {
 	return bg.Server
 }
 
@@ -68,21 +69,26 @@ func (bg *BaseAgServer) GetLocations() []AgLocation {
 	return bg.Locations
 }
 
-func (bg *BaseAgServer) GetHandleLocation() HandleLocation {
-	return bg.HandleLocation
+func (bg *BaseAgServer) GetLocationHandle() LocationHandle {
+	return bg.LocationHandle
 }
 
-// HandleLocation 获取location，以便确认upstream的处理
-type HandleLocation func(server AgServer, params ...interface{}) AgLocation
+// LocationHandle 获取location，以便确认upstream的处理
+type LocationHandle func(server AgServer, pattern string, params ...interface{}) AgLocation
 
-func defaultHandleLocation(server AgServer, params ...interface{}) AgLocation {
+// defaultLocationHandle 默认LocationHandle，使用随机分配算法
+func defaultLocationHandle(server AgServer, pattern string, params ...interface{}) AgLocation {
 	locations := server.GetLocations()
 	if locations != nil {
-		len := len(locations)
-		if len > 0 {
-			// 随机方式
-			selectIndex := time.Now().Second() % len
-			return locations[selectIndex]
+		if len(pattern) > 0{
+			return server.GetLocationMap()[pattern]
+		} else {
+			len := len(locations)
+			if len > 0 {
+				// 随机方式
+				selectIndex := time.Now().Second() % len
+				return locations[selectIndex]
+			}
 		}
 	}
 	return DefaultLocation
