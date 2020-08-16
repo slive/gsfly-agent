@@ -2,7 +2,7 @@
  * Author:slive
  * DATE:2020/8/6
  */
-package agservice
+package agent
 
 import (
 	"gsfly/bootstrap"
@@ -19,41 +19,40 @@ const (
 	LOADBALANCE_IPHASH_WEIGHT = LoadBalanceType(3)
 )
 
-type AgLoadBalance interface {
+// ILoadBalance 负载均衡接口
+type ILoadBalance interface {
 	GetType() LoadBalanceType
 }
 
-type BaseAgLoadBalance struct {
+type LoadBalance struct {
 	Type LoadBalanceType
 }
 
-func NewBaseAgLoadBalance(lbtype LoadBalanceType) AgLoadBalance {
-	return &BaseAgLoadBalance{Type: lbtype}
+func NewLoadBalance(lbtype LoadBalanceType) *LoadBalance {
+	return &LoadBalance{Type: lbtype}
 }
 
-func (bl *BaseAgLoadBalance) GetType() LoadBalanceType {
+func (bl *LoadBalance) GetType() LoadBalanceType {
 	return bl.Type
 }
 
 // LoadBalanceContext 负载均衡上下文
 type LoadBalanceContext struct {
-	Agserver     AgServer
-	Upstream     AgRoute
-	AgentChannel channel.Channel
-	Result       bootstrap.ClientConf
+	Agserver     IAgServer
+	Proxy        IProxy
+	AgentChannel channel.IChannel
 }
 
-func NewLoadBalanceContext(agserver AgServer, upstream AgRoute, agentChannel channel.Channel) *LoadBalanceContext {
+func NewLoadBalanceContext(agserver IAgServer, proxy IProxy, agentChannel channel.IChannel) *LoadBalanceContext {
 	return &LoadBalanceContext{
 		Agserver:     agserver,
-		Upstream:     upstream,
+		Proxy:        proxy,
 		AgentChannel: agentChannel,
-		Result:       nil,
 	}
 }
 
 // 负载均衡处理handle
-type LoadBalanceHandle func(lbcontext *LoadBalanceContext)
+type LoadBalanceHandle func(lbCtx *LoadBalanceContext) bootstrap.IClientConf
 
 func init() {
 	AddLoadBalanceHandle(LOADBALANCE_DEFAULT, defaultLoadBalanceHandle)
@@ -72,22 +71,25 @@ func AddLoadBalanceHandle(lbtype LoadBalanceType, loadBalanceHandle LoadBalanceH
 	localBalanceHandles[lbtype] = loadBalanceHandle
 }
 
-func defaultLoadBalanceHandle(bcontext *LoadBalanceContext) {
-	upstream := bcontext.Upstream
-	confs := upstream.GetClientConfs()
+func defaultLoadBalanceHandle(bcontext *LoadBalanceContext) bootstrap.IClientConf {
+	upstream := bcontext.Proxy
+	confs := upstream.GetConf().(IProxyConf).GetDstClientConfs()
 	// 求余
 	index := time.Now().Second() % len(confs)
-	bcontext.Result = confs[index]
+	return confs[index]
 }
 
-func weighLoadBalanceHandle(bcontext *LoadBalanceContext) {
+func weighLoadBalanceHandle(bcontext *LoadBalanceContext) bootstrap.IClientConf {
 	// TODO 按照比例来
+	return nil
 }
 
-func iphashLoadBalanceHandle(bcontext *LoadBalanceContext) {
+func iphashLoadBalanceHandle(bcontext *LoadBalanceContext) bootstrap.IClientConf {
 	// TODO iphash
+	return nil
 }
 
-func iphashweighLoadBalanceHandle(bcontext *LoadBalanceContext) {
+func iphashweighLoadBalanceHandle(bcontext *LoadBalanceContext) bootstrap.IClientConf {
 	// TODO iphash比重
+	return nil
 }
