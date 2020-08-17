@@ -32,6 +32,10 @@ type IUpstream interface {
 
 	QueryAgentChannel(ctx *UpstreamContext)
 
+	ClearAgentChannel(agentChannel channel.IChannel)
+
+	ClearDstChannel(dstChannel channel.IChannel)
+
 	Clear()
 }
 
@@ -64,28 +68,35 @@ func NewUpstream(parent interface{}, upstreamConf IUpstreamConf) *Upstream {
 	return u
 }
 
-func (b Upstream) GetConf() IUpstreamConf {
-	return b.Conf
+func (ups *Upstream) GetConf() IUpstreamConf {
+	return ups.Conf
 }
 
 // GetDstChannelPool 目标channel池, channelId作为主键
-func (b Upstream) GetDstChannelPool() *hashmap.Map {
-	return b.DstChannelPool
+func (ups *Upstream) GetDstChannelPool() *hashmap.Map {
+	return ups.DstChannelPool
 }
 
 // GetDstChannelMap 记录AgentChannel, 主键为路由的出来的Id
-func (b Upstream) GetDstChannelMap() *hashmap.Map {
-	return b.DstChannelMap
+func (ups *Upstream) GetDstChannelMap() *hashmap.Map {
+	return ups.DstChannelMap
 }
 
 // GetAgentChannelMap 记录AgentChannel, 主键为路由的出来的Id
-func (b Upstream) GetAgentChannelMap() *hashmap.Map {
-	return b.AgentChannelMap
+func (ups *Upstream) GetAgentChannelMap() *hashmap.Map {
+	return ups.AgentChannelMap
 }
 
-func (b Upstream) TakeChannnelKey(ctx *UpstreamContext) (routeId string) {
+func (ups *Upstream) TakeChannnelKey(ctx *UpstreamContext) (routeId string) {
 	panic("implement me")
+}
 
+func (ups *Upstream) ClearAgentChannel(dstChannel channel.IChannel) {
+	panic("implement me")
+}
+
+func (ups *Upstream) ClearDstChannel(dstChannel channel.IChannel) {
+	panic("implement me")
 }
 
 type Route struct {

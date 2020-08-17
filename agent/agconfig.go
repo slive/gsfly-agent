@@ -31,7 +31,7 @@ type ServiceConf struct {
 
 	common.Id
 
-	agServerConf IAgServerConf `json:"agServerConf"`
+	agServerConf IAgServerConf `json:"conf"`
 
 	upstreamConfs map[string]IUpstreamConf `json:"upstreamConfs"`
 
@@ -48,7 +48,7 @@ func NewServiceConf(id string, agServerConf IAgServerConf, upstreamConfs ...IUps
 	}
 
 	if agServerConf == nil {
-		errMsg := "agServerConf is nil"
+		errMsg := "conf is nil"
 		logx.Error(errMsg)
 		panic(errMsg)
 	}

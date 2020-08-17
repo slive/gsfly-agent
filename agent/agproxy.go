@@ -117,22 +117,7 @@ func (proxy *Proxy) OnDstChannelStopHandle(dstChannel channel.IChannel) error {
 
 	// 当clientchannel关闭时，触发serverchannel关闭
 	logx.Info("start to OnDstChannelStopHandle, chId:", dstChId)
-	upstream := dstChannel.GetAttach("upstream")
-	if upstream != nil {
-		proxy, ok := upstream.(IProxy)
-		if ok {
-			agentCh, found := proxy.GetAgentChannelMap().Get(dstChId)
-			if found {
-				agetnChannel, ok := agentCh.(channel.Channel)
-				if ok {
-					agetnChannel.Stop()
-					proxy.GetDstChannelMap().Remove(agetnChannel.GetId())
-				}
-				proxy.GetAgentChannelMap().Remove(agetnChannel.GetId())
-				proxy.GetDstChannelPool().Remove(dstChId)
-			}
-		}
-	}
+	proxy.ClearDstChannel(dstChannel)
 
 	return nil
 }
@@ -147,4 +132,32 @@ func (proxy *Proxy) QueryDstChannel(ctx *UpstreamContext) {
 
 func (proxy *Proxy) QueryAgentChannel(ctx *UpstreamContext) {
 	InnerQueryAgentChannel(proxy, ctx)
+}
+
+func (proxy *Proxy) ClearAgentChannel(agentChannel channel.IChannel) {
+	dstCh, found := proxy.GetDstChannelMap().Get(agentChannel.GetId())
+	if found {
+		dstChannel, ok := dstCh.(channel.Channel)
+		if ok {
+			dstChId := dstChannel.GetId()
+			dstChannel.Stop()
+			proxy.GetAgentChannelMap().Remove(dstChId)
+			proxy.GetDstChannelPool().Remove(dstChId)
+		}
+		proxy.GetDstChannelMap().Remove(agentChannel.GetId())
+	}
+}
+
+func (proxy *Proxy) ClearDstChannel(dstChannel channel.IChannel) {
+	dstChId := dstChannel.GetId()
+	agentCh, found := proxy.GetAgentChannelMap().Get(dstChId)
+	if found {
+		agetnChannel, ok := agentCh.(channel.Channel)
+		if ok {
+			agetnChannel.Stop()
+			proxy.GetDstChannelMap().Remove(agetnChannel.GetId())
+		}
+		proxy.GetAgentChannelMap().Remove(agetnChannel.GetId())
+		proxy.GetDstChannelPool().Remove(dstChId)
+	}
 }

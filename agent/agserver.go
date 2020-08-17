@@ -35,7 +35,7 @@ type AgServer struct {
 
 	server bootstrap.IServerStrap
 
-	agServerConf IAgServerConf
+	conf IAgServerConf
 
 	// 处理location选择
 	locationHandle LocationHandle
@@ -43,37 +43,37 @@ type AgServer struct {
 
 // NewAgServer 创建代理服务端
 // parent 父节点，见IService.
-// serverConf 不可为空
+// agServerConf 不可为空
 func NewAgServer(parent interface{}, agServerConf IAgServerConf) *AgServer {
 	if agServerConf == nil {
-		err := "agServerConf is nil"
+		err := "conf is nil"
 		logx.Error(err)
 		panic(err)
 	}
 
-	b := &AgServer{agServerConf: agServerConf}
+	logx.Info("new agserver, serverconf:", agServerConf)
+	b := &AgServer{conf: agServerConf}
 	b.SetParent(parent)
 
 	// 使用默认locationhandle
 	b.locationHandle = defaultLocationHandle
-	logx.Info("new agserver, serverconf:", agServerConf)
 	return b
 }
 
-func (as *AgServer) GetServer() bootstrap.IServerStrap {
-	return as.server
+func (ags *AgServer) GetServer() bootstrap.IServerStrap {
+	return ags.server
 }
 
-func (as *AgServer) GetConf() IAgServerConf {
-	return as.agServerConf
+func (ags *AgServer) GetConf() IAgServerConf {
+	return ags.conf
 }
 
-func (as *AgServer) GetLocationHandle() LocationHandle {
-	return as.locationHandle
+func (ags *AgServer) GetLocationHandle() LocationHandle {
+	return ags.locationHandle
 }
 
-func (as *AgServer) Start() error {
-	agServerConf := as.GetConf()
+func (ags *AgServer) Start() error {
+	agServerConf := ags.GetConf()
 	defer func() {
 		ret := recover()
 		if ret != nil {
@@ -82,6 +82,7 @@ func (as *AgServer) Start() error {
 			logx.Info("finish to agserver, id:", agServerConf.GetId())
 		}
 	}()
+
 	logx.Info("start agserver, conf:", agServerConf)
 	serverConf := agServerConf.GetServerConf()
 	// 根据不同协议进行不同的操作
@@ -91,16 +92,19 @@ func (as *AgServer) Start() error {
 	case gch.PROTOCOL_HTTPX:
 		break
 	case gch.PROTOCOL_WS:
+		// httpxServer := bootstrap.NewHttpxServer(ags, serverConf.(*bootstrap.HttpxServerConf))
+		// strap := httpxServer.(*bootstrap.HttpWsServerStrap)
+		// strap.AddWsHandleFunc()
 		break
 	case gch.PROTOCOL_HTTP:
 		break
 	case gch.PROTOCOL_KWS00:
-		server = bootstrap.NewKws00Server(as, serverConf.(*bootstrap.KcpServerConf),
-			as.onKws00AgentChannelMsgHandle, as.onKws00AgentChannelRegHandle, nil)
+		server = bootstrap.NewKws00Server(ags, serverConf.(*bootstrap.KcpServerConf),
+			ags.onKws00AgentChannelMsgHandle, ags.onKws00AgentChannelRegHandle, nil)
 		// TODO 可继续注册事件
 		// 默认stop事件
 		chHandle := server.GetChHandle()
-		chHandle.OnStopHandle = as.onAgentChannelStopHandle
+		chHandle.OnStopHandle = ags.onAgentChannelStopHandle
 		break
 	case gch.PROTOCOL_KCP:
 		break
@@ -118,48 +122,37 @@ func (as *AgServer) Start() error {
 
 	err := server.Start()
 	if err == nil {
-		as.server = server
+		ags.server = server
 	}
 	return err
 }
 
-func (as *AgServer) Stop() {
-	logx.Info("stop agserver, conf:", as.GetConf().GetId())
-	server := as.GetServer()
+func (ags *AgServer) Stop() {
+	logx.Info("stop agserver, conf:", ags.GetConf().GetId())
+	server := ags.GetServer()
 	if server != nil && !server.IsClosed() {
 		server.Stop()
 	}
 }
 
 const (
-	upstream_key = "upstream"
-	path_key     = "path"
+	Upstream_Attach_key = "upstream"
+	path_key            = "path"
 )
 
 // onAgentChannelStopHandle 当serverChannel关闭时，触发clientchannel关闭
-func (as *AgServer) onAgentChannelStopHandle(agentChannel gch.IChannel) error {
+func (ags *AgServer) onAgentChannelStopHandle(agentChannel gch.IChannel) error {
 	agentChId := agentChannel.GetId()
 	defer func() {
 		ret := recover()
 		logx.Infof("finish to onAgentChannelStopHandle, chId:%v, ret:%v", agentChId, ret)
 	}()
 	logx.Info("start to onAgentChannelStopHandle, chId:", agentChId)
-
-	ups := agentChannel.GetAttach(upstream_key)
+	ups := agentChannel.GetAttach(Upstream_Attach_key)
 	if ups != nil {
 		proxy, ok := ups.(IProxy)
 		if ok {
-			dstCh, found := proxy.GetDstChannelMap().Get(agentChannel.GetId())
-			if found {
-				dstChannel, ok := dstCh.(gch.Channel)
-				dstChId := dstChannel.GetId()
-				if ok {
-					dstChannel.Stop()
-					proxy.GetAgentChannelMap().Remove(dstChId)
-				}
-				proxy.GetDstChannelPool().Remove(dstChId)
-				proxy.GetDstChannelMap().Remove(agentChannel.GetId())
-			}
+			proxy.ClearAgentChannel(agentChannel)
 		}
 	}
 
@@ -168,32 +161,36 @@ func (as *AgServer) onAgentChannelStopHandle(agentChannel gch.IChannel) error {
 
 const Opcode_Key = "opcode"
 
-func (as *AgServer) onKws00AgentChannelMsgHandle(agentChannel gch.IChannel, frame gkcp.Frame) error {
-	ups, found := agentChannel.GetAttach(upstream_key).(IUpstream)
-	if found {
-		ctx := NewUpstreamContext(agentChannel, nil, nil)
-		ups.QueryDstChannel(ctx)
-		dstCh, found := ctx.GetRet(), ctx.IsOk()
+func (ags *AgServer) onKws00AgentChannelMsgHandle(packet gch.IPacket) error {
+	frame, ok := packet.GetAttach(gkcp.KCP_FRAME_KEY).(gkcp.Frame)
+	if ok {
+		agentChannel := packet.GetChannel()
+		ups, found := agentChannel.GetAttach(Upstream_Attach_key).(IUpstream)
 		if found {
-			dstPacket := dstCh.NewPacket().(*httpx.WsPacket)
-			dstPacket.SetData(frame.GetPayload())
-			dstPacket.MsgType = websocket.TextMessage
-			dstCh.Write(dstPacket)
-			agentChannel.AddAttach(Opcode_Key, frame.GetOpCode())
+			ctx := NewUpstreamContext(agentChannel, nil, frame)
+			ups.QueryDstChannel(ctx)
+			dstCh, found := ctx.GetRet(), ctx.IsOk()
+			if found {
+				dstPacket := dstCh.NewPacket().(*httpx.WsPacket)
+				dstPacket.SetData(frame.GetPayload())
+				dstPacket.MsgType = websocket.TextMessage
+				dstCh.Write(dstPacket)
+				agentChannel.AddAttach(Opcode_Key, frame.GetOpCode())
+			}
 		}
 	}
 	return nil
 }
 
-func (as *AgServer) onKws00AgentChannelRegHandle(agentChannel gch.IChannel, packet gch.IPacket, attach ...interface{}) error {
+func (ags *AgServer) onKws00AgentChannelRegHandle(agentChannel gch.IChannel, packet gch.IPacket) error {
 	agentChId := agentChannel.GetId()
-	frame, ok := attach[0].(gkcp.Frame)
+	frame, ok := packet.GetAttach(gkcp.KCP_FRAME_KEY).(gkcp.Frame)
 	if !ok {
 		return errors.New("register frame is invalid, agentChId:" + agentChId)
 	}
 
 	// TODO filter的处理
-	// filterConfs := as.GetServerConf().GetServerConf().GetFilterConfs()
+	// filterConfs := ags.GetServerConf().GetServerConf().GetFilterConfs()
 
 	// 步骤：
 	// 先获取(可先认证)location->获取(可先认证)upstream->执行负载均衡算法->获取到clientconf
@@ -208,7 +205,7 @@ func (as *AgServer) onKws00AgentChannelRegHandle(agentChannel gch.IChannel, pack
 
 	// 1、约定用path来限定路径
 	localPattern := params[path_key].(string)
-	location := as.locationHandle(as, localPattern)
+	location := ags.locationHandle(ags, localPattern)
 	if location == nil {
 		s := "handle localtion error, pattern:" + localPattern
 		logx.Error(s)
@@ -218,14 +215,14 @@ func (as *AgServer) onKws00AgentChannelRegHandle(agentChannel gch.IChannel, pack
 	// 2、通过负载均衡获取client配置
 	upstreamId := location.GetUpstreamId()
 	logx.Debug("upstreamId:", upstreamId)
-	upsStreams := as.GetParent().(IService).GetUpstreams()
+	upsStreams := ags.GetParent().(IService).GetUpstreams()
 	ups, found := upsStreams[upstreamId]
 	if found {
 		context := NewUpstreamContext(agentChannel, packet, params)
 		ups.SelectDstChannel(context)
 		f := context.IsOk()
 		if f {
-			agentChannel.AddAttach(upstream_key, ups)
+			agentChannel.AddAttach(Upstream_Attach_key, ups)
 			return nil
 		}
 	}

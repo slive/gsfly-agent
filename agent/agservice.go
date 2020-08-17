@@ -26,6 +26,10 @@ type IService interface {
 	Stop()
 
 	IsClosed() bool
+
+	CreateUpstream(upsConf IUpstreamConf) IUpstream
+
+	CreateFilter(filterConf IFilterConf) IFilter
 }
 
 type Service struct {
@@ -47,25 +51,31 @@ func NewService(serviceConf IServiceConf) *Service {
 		panic(errMsg)
 	}
 
-	b := &Service{ServiceConf: serviceConf}
+	service := &Service{ServiceConf: serviceConf}
+
+	// 初始化upstreams
 	upsConfs := serviceConf.GetUpstreamConfs()
-	b.Upstreams = make(map[string]IUpstream, len(upsConfs))
+	service.Upstreams = make(map[string]IUpstream, len(upsConfs))
 	for key, conf := range upsConfs {
-		// 不同的upstreamtype进行不同的处理
-		upsType := conf.GetUpstreamType()
-		if upsType == UPSTREAM_PROXY {
-			proxyConf, ok := conf.(IProxyConf)
-			if ok {
-				b.Upstreams[key] = NewProxy(b, proxyConf)
-			} else {
-				panic("upstream type is invalid")
-			}
+		ups := service.CreateUpstream(conf)
+		if ups != nil {
+			service.GetUpstreams()[key] = ups
 		} else {
-			// TODO
+			logx.Warnf("create ups is nil, conf:", conf)
 		}
 	}
-	b.Closed = true
-	return b
+
+	// 初始化filters
+	filterConfs := serviceConf.GetFilterConfs()
+	service.Filters = make(map[string]IFilter, len(filterConfs))
+	for key, conf := range filterConfs {
+		filter := service.CreateFilter(conf)
+		if filter != nil {
+			service.GetFilters()[key] = filter
+		}
+	}
+	service.Closed = true
+	return service
 }
 
 func (service *Service) GetAgServer() IAgServer {
@@ -78,6 +88,28 @@ func (service *Service) GetUpstreams() map[string]IUpstream {
 
 func (service *Service) GetFilters() map[string]IFilter {
 	return service.Filters
+}
+
+func (service *Service) CreateUpstream(upsConf IUpstreamConf) IUpstream {
+	// 不同的upstreamtype进行不同的处理
+	upsType := upsConf.GetUpstreamType()
+	var ups IUpstream
+	if upsType == UPSTREAM_PROXY {
+		proxyConf, ok := upsConf.(IProxyConf)
+		if ok {
+			ups = NewProxy(service, proxyConf)
+		} else {
+			panic("upstream type is invalid")
+		}
+	} else {
+		// TODO
+	}
+	return ups
+}
+
+func (service *Service) CreateFilter(filterConf IFilterConf) IFilter {
+	// TODO
+	return nil
 }
 
 func (service *Service) Start() error {
@@ -122,6 +154,7 @@ func (service *Service) Stop() {
 		service.Closed = true
 	}()
 	logx.Info("start to close agent, id:", id)
+
 	// 清理代理服务
 	server := service.GetAgServer()
 	if server != nil {
@@ -132,7 +165,11 @@ func (service *Service) Stop() {
 	upstreams := service.Upstreams
 	for _, upstream := range upstreams {
 		upstream.Clear()
+		service.Upstreams = nil
 	}
+
+	// 清理filter相关
+	service.Filters = nil
 }
 
 func (b *Service) IsClosed() bool {
