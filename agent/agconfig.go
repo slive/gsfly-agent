@@ -19,23 +19,28 @@ type IServiceConf interface {
 
 	GetUpstreamConfs() map[string]IUpstreamConf
 
+	GetFilterConfs() map[string]IFilterConf
+
 	GetCommonConf() AgCommonConf
+
+	SetCommonConf(commonConf AgCommonConf)
 }
 
 type ServiceConf struct {
-	common.Id
-
 	common.Parent
+
+	common.Id
 
 	agServerConf IAgServerConf `json:"agServerConf"`
 
 	upstreamConfs map[string]IUpstreamConf `json:"upstreamConfs"`
 
+	filterConfs map[string]IFilterConf `json:"filterConfs"`
+
 	commonConf AgCommonConf `json:"commonConf"`
 }
 
-func NewServiceConf(id string, agServerConf IAgServerConf,
-	commonConf AgCommonConf, upstreamConfs ...IUpstreamConf) *ServiceConf {
+func NewServiceConf(id string, agServerConf IAgServerConf, upstreamConfs ...IUpstreamConf) *ServiceConf {
 	if len(id) <= 0 {
 		errMsg := "service id is nil"
 		logx.Error(errMsg)
@@ -55,14 +60,11 @@ func NewServiceConf(id string, agServerConf IAgServerConf,
 	}
 
 	logx.Info("start to NewServiceConf, id:", id)
-	if commonConf == nil {
-		// TODO 使用默认配置
-	}
 
 	b := &ServiceConf{
 		agServerConf:  agServerConf,
-		commonConf:    commonConf,
 		upstreamConfs: make(map[string]IUpstreamConf, len(upstreamConfs)),
+		filterConfs:   make(map[string]IFilterConf),
 	}
 	b.SetId(id)
 	agServerConf.SetParent(b)
@@ -77,16 +79,24 @@ func NewServiceConf(id string, agServerConf IAgServerConf,
 	return b
 }
 
-func (b ServiceConf) GetAgServerConf() IAgServerConf {
-	return b.agServerConf
+func (sc *ServiceConf) GetAgServerConf() IAgServerConf {
+	return sc.agServerConf
 }
 
-func (b ServiceConf) GetUpstreamConfs() map[string]IUpstreamConf {
-	return b.upstreamConfs
+func (sc *ServiceConf) GetUpstreamConfs() map[string]IUpstreamConf {
+	return sc.upstreamConfs
 }
 
-func (b ServiceConf) GetCommonConf() AgCommonConf {
-	return b.commonConf
+func (sc *ServiceConf) GetFilterConfs() map[string]IFilterConf {
+	return sc.filterConfs
+}
+
+func (sc *ServiceConf) GetCommonConf() AgCommonConf {
+	return sc.commonConf
+}
+
+func (sc *ServiceConf) SetCommonConf(commonConf AgCommonConf) {
+	sc.commonConf = commonConf
 }
 
 type IAgServerConf interface {
@@ -94,11 +104,9 @@ type IAgServerConf interface {
 
 	common.IId
 
-	GetConf() bootstrap.IServerConf
+	GetServerConf() bootstrap.IServerConf
 
 	GetLocationConfs() map[string]ILocationConf
-
-	GetFilterConfs() map[string]IFilterConf
 }
 
 type AgServerConf struct {
@@ -109,12 +117,9 @@ type AgServerConf struct {
 	serverConf bootstrap.IServerConf `json:"serverConf"`
 
 	locationConfs map[string]ILocationConf `json:"locationcConfs"`
-
-	filterConfs map[string]IFilterConf `json:"filterConfs"`
 }
 
-func NewAgServerConf(id string, serverConf bootstrap.IServerConf,
-	filterConf []IFilterConf, locationConf ...ILocationConf) *AgServerConf {
+func NewAgServerConf(id string, serverConf bootstrap.IServerConf, locationConf ...ILocationConf) *AgServerConf {
 	if len(id) <= 0 {
 		errMsg := "service id is nil"
 		logx.Error(errMsg)
@@ -138,16 +143,8 @@ func NewAgServerConf(id string, serverConf bootstrap.IServerConf,
 	b := &AgServerConf{
 		serverConf:    serverConf,
 		locationConfs: make(map[string]ILocationConf, len(locationConf)),
-		filterConfs:   make(map[string]IFilterConf),
 	}
 	b.SetId(id)
-
-	if len(filterConf) > 0 {
-		// filterconf 可选，id作为主键，pattern可能可以匹配出多个filter
-		for _, filter := range filterConf {
-			b.filterConfs[filter.GetId()] = filter
-		}
-	}
 
 	// 放入缓存, pattern作为主键
 	for _, lConf := range locationConf {
@@ -159,16 +156,12 @@ func NewAgServerConf(id string, serverConf bootstrap.IServerConf,
 	return b
 }
 
-func (b AgServerConf) GetConf() bootstrap.IServerConf {
-	return b.serverConf
+func (asc *AgServerConf) GetServerConf() bootstrap.IServerConf {
+	return asc.serverConf
 }
 
-func (b AgServerConf) GetLocationConfs() map[string]ILocationConf {
-	return b.locationConfs
-}
-
-func (b AgServerConf) GetFilterConfs() map[string]IFilterConf {
-	return b.filterConfs
+func (asc *AgServerConf) GetLocationConfs() map[string]ILocationConf {
+	return asc.locationConfs
 }
 
 // IFilterConf 过滤器的配置，根据pattern找到对应的filter，然后获取到filter进行处理
@@ -217,12 +210,12 @@ func NewFilterConf(id string, pattern string, extConf map[string]interface{}) *F
 	return b
 }
 
-func (b FilterConf) GetPattern() string {
-	return b.pattern
+func (fc *FilterConf) GetPattern() string {
+	return fc.pattern
 }
 
-func (b FilterConf) GetExtConf() map[string]interface{} {
-	return b.extConf
+func (fc *FilterConf) GetExtConf() map[string]interface{} {
+	return fc.extConf
 }
 
 // ILocationConf 定位的配置，根据pattern找到对应的upstreamId，然后获取到upstream进行处理
@@ -270,16 +263,16 @@ func NewLocationConf(pattern string, upstreamId string, extConf map[string]inter
 	return b
 }
 
-func (b LocationConf) GetUpstreamId() string {
-	return b.upstreamId
+func (lc *LocationConf) GetUpstreamId() string {
+	return lc.upstreamId
 }
 
-func (b LocationConf) GetPattern() string {
-	return b.pattern
+func (lc *LocationConf) GetPattern() string {
+	return lc.pattern
 }
 
-func (b LocationConf) GetExtConf() map[string]interface{} {
-	return b.extConf
+func (lc *LocationConf) GetExtConf() map[string]interface{} {
+	return lc.extConf
 }
 
 type UpstreamType string
@@ -331,12 +324,12 @@ func NewUpstreamConf(id string, upstreamType UpstreamType) *UpstreamConf {
 	return b
 }
 
-func (b UpstreamConf) GetUpstreamType() UpstreamType {
-	return b.upstreamType
+func (upc *UpstreamConf) GetUpstreamType() UpstreamType {
+	return upc.upstreamType
 }
 
-func (b UpstreamConf) SetUpstreamType(upstreamType UpstreamType) {
-	b.upstreamType = upstreamType
+func (upc *UpstreamConf) SetUpstreamType(upstreamType UpstreamType) {
+	upc.upstreamType = upstreamType
 }
 
 type IProxyConf interface {
@@ -370,15 +363,16 @@ func NewProxyConf(id string, loadBalanceType LoadBalanceType, dstClientConfs ...
 	return p
 }
 
-func (p ProxyConf) GetDstClientConfs() []bootstrap.IClientConf {
-	return p.DstClientConfs
+func (pc *ProxyConf) GetDstClientConfs() []bootstrap.IClientConf {
+	return pc.DstClientConfs
 }
 
-func (p ProxyConf) GetLoadBalanceType() LoadBalanceType {
-	return p.LoadBalanceType
+func (pc *ProxyConf) GetLoadBalanceType() LoadBalanceType {
+	return pc.LoadBalanceType
 }
 
 // AgCommonConf 代理的通用配置
 // 如日志的配置
 type AgCommonConf interface {
+	// TODO
 }
