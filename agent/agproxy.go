@@ -5,10 +5,8 @@
 package agent
 
 import (
-	"errors"
 	"gsfly/bootstrap"
 	"gsfly/channel"
-	gkcp "gsfly/channel/udpx/kcpx"
 	logx "gsfly/logger"
 )
 
@@ -37,31 +35,21 @@ func (proxy *Proxy) SelectDstChannel(ctx *UpstreamContext) {
 	// 3、代理到目标
 	var dstCh channel.IChannel
 	params := ctx.Params[0].(map[string]interface{})
+	logx.Info("select params:", params)
+	agentCh := ctx.Channel
+	var clientStrap bootstrap.IClientStrap
 	clientPro := clientConf.GetProtocol()
 	switch clientPro {
 	case channel.PROTOCOL_WS, channel.PROTOCOL_HTTPX:
 		handle := channel.NewDefChHandle(proxy.onDstChannelMsgHandle)
-		handle.OnStopHandle = proxy.OnDstChannelStopHandle
 		wsClientConf := clientConf.(*bootstrap.WsClientConf)
-		wsClientConf.Params = params
-
-		logx.Info("params:", wsClientConf.Params)
-		wsClient := bootstrap.NewWsClient(proxy, wsClientConf, handle)
-		err := wsClient.Start()
-		agentCh := ctx.Channel
-		if err != nil {
-			logx.Error("dialws error, agentChId:" + agentCh.GetId())
-			return
-		}
-		// 拨号成功，记录
-		dstCh = wsClient.GetChannel()
-		proxy.GetAgentChannelMap().Put(dstCh.GetId(), agentCh)
-		proxy.GetDstChannelMap().Put(agentCh.GetId(), dstCh)
-		break
+		clientStrap = bootstrap.NewWsClient(proxy, wsClientConf, handle, params)
 	case channel.PROTOCOL_HTTP:
 		break
 	case channel.PROTOCOL_KWS00:
-		break
+		kwsClientConf := clientConf.(*bootstrap.Kws00ClientConf)
+		clientStrap = bootstrap.NewKws00Client(proxy, kwsClientConf, proxy.onDstChannelMsgHandle, proxy.OnRegisterHandle,
+			nil, params)
 	case channel.PROTOCOL_KWS01:
 		break
 	case channel.PROTOCOL_TCP:
@@ -73,8 +61,19 @@ func (proxy *Proxy) SelectDstChannel(ctx *UpstreamContext) {
 	default:
 		// channel.PROTOCOL_WS
 	}
-	found := (dstCh != nil)
+	found := (clientStrap != nil)
 	if found {
+		handle := clientStrap.GetChHandle()
+		handle.SetOnStopHandle(proxy.OnDstChannelStopHandle)
+		err := clientStrap.Start()
+		if err != nil {
+			logx.Error("dialws error, agentChId:" + agentCh.GetId())
+			return
+		}
+		// 拨号成功，记录
+		dstCh = clientStrap.GetChannel()
+		proxy.GetAgentChannelMap().Put(dstCh.GetId(), agentCh)
+		proxy.GetDstChannelMap().Put(agentCh.GetId(), dstCh)
 		proxy.GetDstChannelPool().Put(dstCh.GetId(), dstCh)
 	}
 	ctx.SetRet(dstCh)
@@ -86,25 +85,53 @@ func (proxy *Proxy) onDstChannelMsgHandle(packet channel.IPacket) error {
 	proxy.QueryAgentChannel(upsCtx)
 	agentChannel, found := upsCtx.GetRet(), upsCtx.IsOk()
 	if found {
-		// 回写，区分第一次，最后一次等？
-		opcode := gkcp.OPCODE_TEXT_SIGNALLING
-		oc := agentChannel.GetAttach(Opcode_Key)
-		if oc != nil {
-			cpc, ok := oc.(uint16)
-			if ok {
-				opcode = cpc
-			}
-		}
-		frame := gkcp.NewOutputFrame(opcode, packet.GetData())
-		srcPacket := agentChannel.NewPacket()
-		srcPacket.SetData(frame.GetKcpData())
-		agentChannel.Write(srcPacket)
+		ProxyWrite(packet, agentChannel)
 		return nil
-	} else {
-		s := "src channel is nil, dst channel id:" + packet.GetChannel().GetId()
-		logx.Error(s)
-		return errors.New(s)
+		// protocol := agentChannel.GetConf().GetProtocol()
+		// switch protocol {
+		// case channel.PROTOCOL_WS, channel.PROTOCOL_HTTPX:
+		// 	// 回写，区分第一次，最后一次等？
+		// 	wsChannel := agentChannel.(*httpx.WsChannel)
+		// 	srcPacket := wsChannel.NewPacket().(*httpx.WsPacket)
+		// 	srcPacket.SetData(packet.GetData())
+		// 	srcPacket.MsgType = websocket.TextMessage
+		// 	agentChannel.Write(srcPacket)
+		// 	return nil
+		// case channel.PROTOCOL_HTTP:
+		// case channel.PROTOCOL_KWS00:
+		// 	// 回写，区分第一次，最后一次等？
+		// 	opcode := gkcp.OPCODE_TEXT_SIGNALLING
+		// 	oc := agentChannel.GetAttach(Opcode_Key)
+		// 	if oc != nil {
+		// 		cpc, ok := oc.(uint16)
+		// 		if ok {
+		// 			opcode = cpc
+		// 		}
+		// 	}
+		// 	frame := gkcp.NewOutputFrame(opcode, packet.GetData())
+		// 	srcPacket := agentChannel.NewPacket()
+		// 	srcPacket.SetData(frame.GetKcpData())
+		// 	agentChannel.Write(srcPacket)
+		// 	return nil
+		// case channel.PROTOCOL_KWS01:
+		// 	break
+		// case channel.PROTOCOL_TCP:
+		// 	break
+		// case channel.PROTOCOL_UDP:
+		// 	break
+		// case channel.PROTOCOL_KCP:
+		// 	break
+		// default:
+		// }
 	}
+	logx.Warn("unknown dst ProxyWrite.")
+	return nil
+	return nil
+}
+
+func (proxy *Proxy) OnRegisterHandle(channel channel.IChannel, packet channel.IPacket) error {
+	logx.Infof("register success:", channel.GetId())
+	return nil
 }
 
 // OnDstChannelStopHandle 当dstchannel关闭时，触发agentchannel关闭

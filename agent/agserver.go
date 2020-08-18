@@ -87,24 +87,19 @@ func (ags *AgServer) Start() error {
 	serverConf := agServerConf.GetServerConf()
 	// 根据不同协议进行不同的操作
 	serverProtocol := serverConf.GetProtocol()
-	var server bootstrap.IServerStrap
+	var serverStrap bootstrap.IServerStrap
 	switch serverProtocol {
 	case gch.PROTOCOL_HTTPX:
-		break
 	case gch.PROTOCOL_WS:
-		// httpxServer := bootstrap.NewHttpxServer(ags, serverConf.(*bootstrap.HttpxServerConf))
-		// strap := httpxServer.(*bootstrap.HttpWsServerStrap)
-		// strap.AddWsHandleFunc()
-		break
+		chHandle := gch.NewDefChHandle(ags.onAgentChannelMsgHandle)
+		chHandle.SetOnRegisterHandle(ags.onAgentChannelRegHandle)
+		wsServerStrap := bootstrap.NewWsServerStrap(ags, serverConf.(*bootstrap.WsServerConf), chHandle, nil)
+		serverStrap = wsServerStrap
 	case gch.PROTOCOL_HTTP:
-		break
 	case gch.PROTOCOL_KWS00:
-		server = bootstrap.NewKws00Server(ags, serverConf.(*bootstrap.KcpServerConf),
-			ags.onKws00AgentChannelMsgHandle, ags.onKws00AgentChannelRegHandle, nil)
-		// TODO 可继续注册事件
-		// 默认stop事件
-		chHandle := server.GetChHandle()
-		chHandle.OnStopHandle = ags.onAgentChannelStopHandle
+		kwsServerStrap := bootstrap.NewKws00Server(ags, serverConf.(*bootstrap.Kw00ServerConf),
+			ags.onAgentChannelMsgHandle, ags.onAgentChannelRegHandle, nil)
+		serverStrap = kwsServerStrap
 		break
 	case gch.PROTOCOL_KCP:
 		break
@@ -120,9 +115,13 @@ func (ags *AgServer) Start() error {
 		return errors.New(errMsg)
 	}
 
-	err := server.Start()
+	err := serverStrap.Start()
 	if err == nil {
-		ags.server = server
+		// TODO 可继续注册事件
+		// 默认stop事件
+		chHandle := serverStrap.GetChHandle()
+		chHandle.OnStopHandle = ags.onAgentChannelStopHandle
+		ags.server = serverStrap
 	}
 	return err
 }
@@ -157,6 +156,132 @@ func (ags *AgServer) onAgentChannelStopHandle(agentChannel gch.IChannel) error {
 	}
 
 	return nil
+}
+
+func (ags *AgServer) onAgentChannelMsgHandle(packet gch.IPacket) error {
+	agentChannel := packet.GetChannel()
+	ups, found := agentChannel.GetAttach(Upstream_Attach_key).(IUpstream)
+	if found {
+		ctx := NewUpstreamContext(agentChannel, packet)
+		ups.QueryDstChannel(ctx)
+		dstCh, found := ctx.GetRet(), ctx.IsOk()
+		if found {
+			ProxyWrite(packet, dstCh)
+			return nil
+		}
+	}
+	logx.Warn("unknown agent ProxyWrite.")
+	return nil
+}
+
+func ProxyWrite(fromPacket gch.IPacket, toChannel gch.IChannel) {
+	fromChannel := fromPacket.GetChannel()
+	dstPacket := toChannel.NewPacket()
+	protocol := fromChannel.GetConf().GetProtocol()
+	dstProtocol := toChannel.GetConf().GetProtocol()
+	// 根据不同的协议类型，转发到不同的目的dstChannel
+	switch protocol {
+	case gch.PROTOCOL_WS:
+		switch dstProtocol {
+		case gch.PROTOCOL_KWS00:
+			frame := gkcp.NewOutputFrame(gkcp.OPCODE_TEXT_SIGNALLING, fromPacket.GetData())
+			dstPacket.(*gkcp.KWS00Packet).Frame = frame
+			dstPacket.SetData(frame.GetKcpData())
+			// 用于代理回复后对应
+			fromChannel.AddAttach(Opcode_Key, frame.GetOpCode())
+		case gch.PROTOCOL_WS:
+			dstPacket.SetData(fromPacket.GetData())
+			dstPacket.(*httpx.WsPacket).MsgType = fromPacket.(*httpx.WsPacket).MsgType
+		default:
+			dstPacket.SetData(fromPacket.GetData())
+		}
+	case gch.PROTOCOL_KWS00:
+		frame := fromPacket.(*gkcp.KWS00Packet).Frame
+		switch dstProtocol {
+		case gch.PROTOCOL_KWS00:
+			dstPacket.(*gkcp.KWS00Packet).Frame = frame
+			dstPacket.SetData(frame.GetKcpData())
+		case gch.PROTOCOL_WS:
+			dstPacket.SetData(frame.GetPayload())
+			dstPacket.(*httpx.WsPacket).MsgType = websocket.TextMessage
+		default:
+			dstPacket.SetData(fromPacket.GetData())
+		}
+		// 用于代理回复后对应
+		fromChannel.AddAttach(Opcode_Key, frame.GetOpCode())
+	default:
+		dstPacket.SetData(fromPacket.GetData())
+	}
+	toChannel.Write(dstPacket)
+}
+
+func (ags *AgServer) GetLocationPattern(agentChannel gch.IChannel, packet gch.IPacket) (localPattern string, params []interface{}) {
+	protocol := agentChannel.GetConf().GetProtocol()
+	localPattern = ""
+	params = make([]interface{}, 1)
+	switch protocol {
+	case gch.PROTOCOL_WS:
+		wsChannel := agentChannel.(*httpx.WsChannel)
+		params[0] = wsChannel.GetParams()
+		// 1、约定用path来限定路径
+		wsServerConf := wsChannel.GetConf().(bootstrap.IWsServerConf)
+		localPattern = wsServerConf.GetPath()
+	case gch.PROTOCOL_KWS00:
+		agentChId := agentChannel.GetId()
+		frame, ok := packet.GetAttach(gkcp.KCP_FRAME_KEY).(gkcp.Frame)
+		if !ok {
+			logx.Warn("register frame is invalid, agentChId:", agentChId)
+		} else {
+			kws00Params := make(map[string]interface{})
+			err := json.Unmarshal(frame.GetPayload(), &kws00Params)
+			if err != nil {
+				logx.Warn("params error:", err)
+			} else {
+				// 1、约定用path来限定路径
+				localPattern = kws00Params[path_key].(string)
+				params[0] = kws00Params
+			}
+		}
+	default:
+		// TODO 待完善
+	}
+	logx.Infof("channel params:%v, localPattern:%v", params, localPattern)
+	return localPattern, params
+}
+
+func (ags *AgServer) onAgentChannelRegHandle(agentChannel gch.IChannel, packet gch.IPacket) error {
+	// TODO filter的处理
+	// filterConfs := ags.GetServerConf().GetServerConf().GetFilterConfs()
+
+	// 步骤：
+	// 先获取(可先认证)location->获取(可先认证)upstream->执行负载均衡算法->获取到clientconf
+	// 获取clientchannel
+	localPattern, params := ags.GetLocationPattern(agentChannel, packet)
+	location := ags.locationHandle(ags, localPattern)
+	if location == nil {
+		s := "handle localtion error, pattern:" + localPattern
+		logx.Error(s)
+		return errors.New(s)
+	}
+
+	// 2、通过负载均衡获取client配置
+	upstreamId := location.GetUpstreamId()
+	logx.Debug("upstreamId:", upstreamId)
+	upsStreams := ags.GetParent().(IService).GetUpstreams()
+	ups, found := upsStreams[upstreamId]
+	if found {
+		context := NewUpstreamContext(agentChannel, packet, params...)
+		ups.SelectDstChannel(context)
+		f := context.IsOk()
+		logx.Info("select ok:", f)
+		if f {
+			agentChannel.AddAttach(Upstream_Attach_key, ups)
+			return nil
+		}
+	}
+	errMs := "select DstChannel error."
+	logx.Error(errMs, ups)
+	return errors.New(errMs)
 }
 
 const Opcode_Key = "opcode"

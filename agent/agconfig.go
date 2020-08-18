@@ -152,7 +152,7 @@ func NewAgServerConf(id string, serverConf bootstrap.IServerConf, locationConf .
 		lConf.SetParent(b)
 		b.locationConfs[lConf.GetPattern()] = lConf
 	}
-	logx.Info("finish to NewAgServerConf, b:", b)
+	logx.Info("finish to NewAgServerConf, conf:", b)
 	return b
 }
 

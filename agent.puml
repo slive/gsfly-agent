@@ -1,0 +1,7 @@
+@startuml
+    [*] --> client
+    client --> agent:websocket/kcp
+    agent --> agent :proxy到dstclient
+    agent --> dstServer:dstclient
+    }
+@enduml
