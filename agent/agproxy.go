@@ -41,15 +41,16 @@ func (proxy *Proxy) SelectDstChannel(ctx *UpstreamContext) {
 	clientPro := clientConf.GetProtocol()
 	switch clientPro {
 	case channel.PROTOCOL_WS, channel.PROTOCOL_HTTPX:
-		handle := channel.NewDefChHandle(proxy.onDstChannelMsgHandle)
+		handle := channel.NewDefChHandle(proxy.OnDstChannelMsgHandle)
 		wsClientConf := clientConf.(*bootstrap.WsClientConf)
-		clientStrap = bootstrap.NewWsClient(proxy, wsClientConf, handle, params)
+		handle.SetOnRegisteredHandle(proxy.OnDstChannelRetHandle)
+		clientStrap = bootstrap.NewWsClientStrap(proxy, wsClientConf, handle, params)
 	case channel.PROTOCOL_HTTP:
 		break
 	case channel.PROTOCOL_KWS00:
 		kwsClientConf := clientConf.(*bootstrap.Kws00ClientConf)
-		clientStrap = bootstrap.NewKws00Client(proxy, kwsClientConf, proxy.onDstChannelMsgHandle, proxy.OnRegisterHandle,
-			nil, params)
+		clientStrap = bootstrap.NewKws00ClientStrap(proxy, kwsClientConf, proxy.OnDstChannelMsgHandle,
+			proxy.OnDstChannelRetHandle, nil, nil)
 	case channel.PROTOCOL_KWS01:
 		break
 	case channel.PROTOCOL_TCP:
@@ -61,6 +62,7 @@ func (proxy *Proxy) SelectDstChannel(ctx *UpstreamContext) {
 	default:
 		// channel.PROTOCOL_WS
 	}
+
 	found := (clientStrap != nil)
 	if found {
 		handle := clientStrap.GetChHandle()
@@ -70,6 +72,7 @@ func (proxy *Proxy) SelectDstChannel(ctx *UpstreamContext) {
 			logx.Error("dialws error, agentChId:" + agentCh.GetId())
 			return
 		}
+
 		// 拨号成功，记录
 		dstCh = clientStrap.GetChannel()
 		proxy.GetAgentChannelMap().Put(dstCh.GetId(), agentCh)
@@ -79,8 +82,8 @@ func (proxy *Proxy) SelectDstChannel(ctx *UpstreamContext) {
 	ctx.SetRet(dstCh)
 }
 
-// onDstChannelMsgHandle upstream的客户端channel收到消息后的处理，直接会写到server对应的客户端channel
-func (proxy *Proxy) onDstChannelMsgHandle(packet channel.IPacket) error {
+// OnDstChannelMsgHandle upstream的客户端channel收到消息后的处理，直接会写到server对应的客户端channel
+func (proxy *Proxy) OnDstChannelMsgHandle(packet channel.IPacket) error {
 	upsCtx := NewUpstreamContext(packet.GetChannel(), packet)
 	proxy.QueryAgentChannel(upsCtx)
 	agentChannel, found := upsCtx.GetRet(), upsCtx.IsOk()
@@ -129,8 +132,9 @@ func (proxy *Proxy) onDstChannelMsgHandle(packet channel.IPacket) error {
 	return nil
 }
 
-func (proxy *Proxy) OnRegisterHandle(channel channel.IChannel, packet channel.IPacket) error {
-	logx.Infof("register success:", channel.GetId())
+func (proxy *Proxy) OnDstChannelRetHandle(dstChannel channel.IChannel, packet channel.IPacket) error {
+	logx.Info("register success:", dstChannel.GetId())
+	dstChannel.AddAttach(Activating_Key, true)
 	return nil
 }
 

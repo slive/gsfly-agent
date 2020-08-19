@@ -92,12 +92,12 @@ func (ags *AgServer) Start() error {
 	case gch.PROTOCOL_HTTPX:
 	case gch.PROTOCOL_WS:
 		chHandle := gch.NewDefChHandle(ags.onAgentChannelMsgHandle)
-		chHandle.SetOnRegisterHandle(ags.onAgentChannelRegHandle)
+		chHandle.SetOnRegisteredHandle(ags.onAgentChannelRegHandle)
 		wsServerStrap := bootstrap.NewWsServerStrap(ags, serverConf.(*bootstrap.WsServerConf), chHandle, nil)
 		serverStrap = wsServerStrap
 	case gch.PROTOCOL_HTTP:
 	case gch.PROTOCOL_KWS00:
-		kwsServerStrap := bootstrap.NewKws00Server(ags, serverConf.(*bootstrap.Kw00ServerConf),
+		kwsServerStrap := bootstrap.NewKws00ServerStrap(ags, serverConf.(*bootstrap.Kw00ServerConf),
 			ags.onAgentChannelMsgHandle, ags.onAgentChannelRegHandle, nil)
 		serverStrap = kwsServerStrap
 		break
@@ -115,15 +115,20 @@ func (ags *AgServer) Start() error {
 		return errors.New(errMsg)
 	}
 
-	err := serverStrap.Start()
-	if err == nil {
+	if serverStrap != nil {
 		// TODO 可继续注册事件
 		// 默认stop事件
 		chHandle := serverStrap.GetChHandle()
 		chHandle.OnStopHandle = ags.onAgentChannelStopHandle
-		ags.server = serverStrap
+		err := serverStrap.Start()
+		if err == nil {
+			ags.server = serverStrap
+		}
+		return err
 	}
-	return err
+	errMs := "serverStrap is nil"
+	logx.Error(errMs)
+	return errors.New(errMs)
 }
 
 func (ags *AgServer) Stop() {
@@ -177,14 +182,24 @@ func (ags *AgServer) onAgentChannelMsgHandle(packet gch.IPacket) error {
 func ProxyWrite(fromPacket gch.IPacket, toChannel gch.IChannel) {
 	fromChannel := fromPacket.GetChannel()
 	dstPacket := toChannel.NewPacket()
-	protocol := fromChannel.GetConf().GetProtocol()
-	dstProtocol := toChannel.GetConf().GetProtocol()
+	fromProtocol := fromChannel.GetConf().GetProtocol()
+	toProtocol := toChannel.GetConf().GetProtocol()
+	activating := fromChannel.GetAttach(Activating_Key)
+	logx.Info("activating:", activating)
 	// 根据不同的协议类型，转发到不同的目的dstChannel
-	switch protocol {
+	switch fromProtocol {
 	case gch.PROTOCOL_WS:
-		switch dstProtocol {
+		switch toProtocol {
 		case gch.PROTOCOL_KWS00:
-			frame := gkcp.NewOutputFrame(gkcp.OPCODE_TEXT_SIGNALLING, fromPacket.GetData())
+			opCode := gkcp.OPCODE_TEXT_SIGNALLING
+			if activating != nil {
+				at, f := activating.(bool)
+				if f && at {
+					opCode = gkcp.OPCODE_TEXT_SESSION
+				}
+			}
+
+			frame := gkcp.NewOutputFrame(opCode, fromPacket.GetData())
 			dstPacket.(*gkcp.KWS00Packet).Frame = frame
 			dstPacket.SetData(frame.GetKcpData())
 			// 用于代理回复后对应
@@ -197,9 +212,8 @@ func ProxyWrite(fromPacket gch.IPacket, toChannel gch.IChannel) {
 		}
 	case gch.PROTOCOL_KWS00:
 		frame := fromPacket.(*gkcp.KWS00Packet).Frame
-		switch dstProtocol {
+		switch toProtocol {
 		case gch.PROTOCOL_KWS00:
-			dstPacket.(*gkcp.KWS00Packet).Frame = frame
 			dstPacket.SetData(frame.GetKcpData())
 		case gch.PROTOCOL_WS:
 			dstPacket.SetData(frame.GetPayload())
@@ -213,6 +227,7 @@ func ProxyWrite(fromPacket gch.IPacket, toChannel gch.IChannel) {
 		dstPacket.SetData(fromPacket.GetData())
 	}
 	toChannel.Write(dstPacket)
+	fromChannel.AddAttach(Activating_Key, false)
 }
 
 func (ags *AgServer) GetLocationPattern(agentChannel gch.IChannel, packet gch.IPacket) (localPattern string, params []interface{}) {
@@ -249,6 +264,8 @@ func (ags *AgServer) GetLocationPattern(agentChannel gch.IChannel, packet gch.IP
 	return localPattern, params
 }
 
+const Activating_Key = "activating"
+
 func (ags *AgServer) onAgentChannelRegHandle(agentChannel gch.IChannel, packet gch.IPacket) error {
 	// TODO filter的处理
 	// filterConfs := ags.GetServerConf().GetServerConf().GetFilterConfs()
@@ -276,6 +293,7 @@ func (ags *AgServer) onAgentChannelRegHandle(agentChannel gch.IChannel, packet g
 		logx.Info("select ok:", f)
 		if f {
 			agentChannel.AddAttach(Upstream_Attach_key, ups)
+			// agentChannel.AddAttach(Activating_Key, true)
 			return nil
 		}
 	}
@@ -285,74 +303,6 @@ func (ags *AgServer) onAgentChannelRegHandle(agentChannel gch.IChannel, packet g
 }
 
 const Opcode_Key = "opcode"
-
-func (ags *AgServer) onKws00AgentChannelMsgHandle(packet gch.IPacket) error {
-	frame, ok := packet.GetAttach(gkcp.KCP_FRAME_KEY).(gkcp.Frame)
-	if ok {
-		agentChannel := packet.GetChannel()
-		ups, found := agentChannel.GetAttach(Upstream_Attach_key).(IUpstream)
-		if found {
-			ctx := NewUpstreamContext(agentChannel, nil, frame)
-			ups.QueryDstChannel(ctx)
-			dstCh, found := ctx.GetRet(), ctx.IsOk()
-			if found {
-				dstPacket := dstCh.NewPacket().(*httpx.WsPacket)
-				dstPacket.SetData(frame.GetPayload())
-				dstPacket.MsgType = websocket.TextMessage
-				dstCh.Write(dstPacket)
-				agentChannel.AddAttach(Opcode_Key, frame.GetOpCode())
-			}
-		}
-	}
-	return nil
-}
-
-func (ags *AgServer) onKws00AgentChannelRegHandle(agentChannel gch.IChannel, packet gch.IPacket) error {
-	agentChId := agentChannel.GetId()
-	frame, ok := packet.GetAttach(gkcp.KCP_FRAME_KEY).(gkcp.Frame)
-	if !ok {
-		return errors.New("register frame is invalid, agentChId:" + agentChId)
-	}
-
-	// TODO filter的处理
-	// filterConfs := ags.GetServerConf().GetServerConf().GetFilterConfs()
-
-	// 步骤：
-	// 先获取(可先认证)location->获取(可先认证)upstream->执行负载均衡算法->获取到clientconf
-	// 获取clientchannel
-	params := make(map[string]interface{})
-	err := json.Unmarshal(frame.GetPayload(), &params)
-	if err != nil {
-		logx.Debug("params error:", err)
-		return err
-	}
-	logx.Debug("hangup params:", params)
-
-	// 1、约定用path来限定路径
-	localPattern := params[path_key].(string)
-	location := ags.locationHandle(ags, localPattern)
-	if location == nil {
-		s := "handle localtion error, pattern:" + localPattern
-		logx.Error(s)
-		return errors.New(s)
-	}
-
-	// 2、通过负载均衡获取client配置
-	upstreamId := location.GetUpstreamId()
-	logx.Debug("upstreamId:", upstreamId)
-	upsStreams := ags.GetParent().(IService).GetUpstreams()
-	ups, found := upsStreams[upstreamId]
-	if found {
-		context := NewUpstreamContext(agentChannel, packet, params)
-		ups.SelectDstChannel(context)
-		f := context.IsOk()
-		if f {
-			agentChannel.AddAttach(Upstream_Attach_key, ups)
-			return nil
-		}
-	}
-	return errors.New("select DstChannel error.")
-}
 
 // locationHandle 获取location，以便确认upstream的处理
 // pattern 匹配路径
