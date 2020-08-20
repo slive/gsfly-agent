@@ -43,14 +43,14 @@ func (proxy *Proxy) SelectDstChannel(ctx *UpstreamContext) {
 	case channel.PROTOCOL_WS, channel.PROTOCOL_HTTPX:
 		handle := channel.NewDefChHandle(proxy.OnDstChannelMsgHandle)
 		wsClientConf := clientConf.(*bootstrap.WsClientConf)
-		handle.SetOnRegisteredHandle(proxy.OnDstChannelRetHandle)
+		handle.SetOnRegisteredHandle(onDstChannelRetHandle(clientPro))
 		clientStrap = bootstrap.NewWsClientStrap(proxy, wsClientConf, handle, params)
 	case channel.PROTOCOL_HTTP:
 		break
 	case channel.PROTOCOL_KWS00:
 		kwsClientConf := clientConf.(*bootstrap.Kws00ClientConf)
 		clientStrap = bootstrap.NewKws00ClientStrap(proxy, kwsClientConf, proxy.OnDstChannelMsgHandle,
-			proxy.OnDstChannelRetHandle, nil, params)
+			onDstChannelRetHandle(clientPro), nil, params)
 	case channel.PROTOCOL_KWS01:
 		break
 	case channel.PROTOCOL_TCP:
@@ -132,10 +132,14 @@ func (proxy *Proxy) OnDstChannelMsgHandle(packet channel.IPacket) error {
 	return nil
 }
 
-func (proxy *Proxy) OnDstChannelRetHandle(dstChannel channel.IChannel, packet channel.IPacket) error {
-	logx.Info("register success:", dstChannel.GetId())
-	dstChannel.AddAttach(Activating_Key, true)
-	return nil
+func onDstChannelRetHandle(protocol channel.Protocol) func(dstChannel channel.IChannel, packet channel.IPacket) error {
+	return func(dstChannel channel.IChannel, packet channel.IPacket) error {
+		if protocol != channel.PROTOCOL_KWS00 {
+			dstChannel.AddAttach(Activating_Key, true)
+		}
+		logx.Info("register success:", dstChannel.GetId())
+		return nil
+	}
 }
 
 // OnDstChannelStopHandle 当dstchannel关闭时，触发agentchannel关闭
