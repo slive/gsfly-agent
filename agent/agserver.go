@@ -8,13 +8,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	bootstrap "github.com/Slive/gsfly/bootstrap"
+	gch "github.com/Slive/gsfly/channel"
+	httpx "github.com/Slive/gsfly/channel/tcpx/httpx"
+	gkcp "github.com/Slive/gsfly/channel/udpx/kcpx"
+	common "github.com/Slive/gsfly/common"
+	logx "github.com/Slive/gsfly/logger"
 	websocket "github.com/gorilla/websocket"
-	bootstrap "gsfly/bootstrap"
-	gch "gsfly/channel"
-	httpx "gsfly/channel/tcpx/httpx"
-	gkcp "gsfly/channel/udpx/kcpx"
-	common "gsfly/common"
-	logx "gsfly/logger"
 )
 
 type IAgServer interface {

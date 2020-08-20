@@ -5,9 +5,9 @@
 package agent
 
 import (
-	"gsfly/bootstrap"
-	"gsfly/channel"
-	logx "gsfly/logger"
+	"github.com/Slive/gsfly/bootstrap"
+	"github.com/Slive/gsfly/channel"
+	logx "github.com/Slive/gsfly/logger"
 )
 
 type IProxy interface {

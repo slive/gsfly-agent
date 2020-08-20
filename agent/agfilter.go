@@ -5,8 +5,8 @@
 package agent
 
 import (
-	"gsfly/channel"
-	"gsfly/common"
+	"github.com/Slive/gsfly/channel"
+	"github.com/Slive/gsfly/common"
 )
 
 type IFilter interface {

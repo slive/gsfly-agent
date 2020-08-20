@@ -5,8 +5,8 @@
 package agent
 
 import (
-	"gsfly/bootstrap"
-	"gsfly/channel"
+	"github.com/Slive/gsfly/bootstrap"
+	"github.com/Slive/gsfly/channel"
 	"time"
 )
 

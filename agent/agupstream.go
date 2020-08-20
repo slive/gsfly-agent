@@ -6,11 +6,11 @@
 package agent
 
 import (
+	"github.com/Slive/gsfly/channel"
+	"github.com/Slive/gsfly/common"
+	logx "github.com/Slive/gsfly/logger"
+	"github.com/Slive/gsfly/util"
 	"github.com/emirpasic/gods/maps/hashmap"
-	"gsfly/channel"
-	"gsfly/common"
-	logx "gsfly/logger"
-	"gsfly/util"
 )
 
 type IUpstream interface {

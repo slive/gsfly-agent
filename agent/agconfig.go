@@ -5,9 +5,9 @@
 package agent
 
 import (
-	"gsfly/bootstrap"
-	"gsfly/common"
-	logx "gsfly/logger"
+	"github.com/Slive/gsfly/bootstrap"
+	"github.com/Slive/gsfly/common"
+	logx "github.com/Slive/gsfly/logger"
 )
 
 type IServiceConf interface {
