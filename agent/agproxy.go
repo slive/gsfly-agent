@@ -50,7 +50,7 @@ func (proxy *Proxy) SelectDstChannel(ctx *UpstreamContext) {
 	case channel.PROTOCOL_KWS00:
 		kwsClientConf := clientConf.(*bootstrap.Kws00ClientConf)
 		clientStrap = bootstrap.NewKws00ClientStrap(proxy, kwsClientConf, proxy.OnDstChannelMsgHandle,
-			proxy.OnDstChannelRetHandle, nil, nil)
+			proxy.OnDstChannelRetHandle, nil, params)
 	case channel.PROTOCOL_KWS01:
 		break
 	case channel.PROTOCOL_TCP:
