@@ -134,7 +134,7 @@ func (proxy *Proxy) OnDstChannelMsgHandle(packet channel.IPacket) error {
 
 func onDstChannelRetHandle(protocol channel.Protocol) func(dstChannel channel.IChannel, packet channel.IPacket) error {
 	return func(dstChannel channel.IChannel, packet channel.IPacket) error {
-		if protocol != channel.PROTOCOL_KWS00 {
+		if protocol == channel.PROTOCOL_KWS00 {
 			dstChannel.AddAttach(Activating_Key, true)
 		}
 		logx.Info("register success:", dstChannel.GetId())

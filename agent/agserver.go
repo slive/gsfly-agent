@@ -185,7 +185,7 @@ func ProxyWrite(fromPacket gch.IPacket, toChannel gch.IChannel) {
 	fromProtocol := fromChannel.GetConf().GetProtocol()
 	toProtocol := toChannel.GetConf().GetProtocol()
 	activating := fromChannel.GetAttach(Activating_Key)
-	logx.Info("activating:", activating)
+	logx.Debugf("from chId:%v, activating:%v", fromChannel.GetId(), activating)
 	// 根据不同的协议类型，转发到不同的目的dstChannel
 	switch fromProtocol {
 	case gch.PROTOCOL_WS:
