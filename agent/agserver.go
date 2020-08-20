@@ -253,7 +253,12 @@ func (ags *AgServer) GetLocationPattern(agentChannel gch.IChannel, packet gch.IP
 				logx.Warn("params error:", err)
 			} else {
 				// 1、约定用path来限定路径
-				localPattern = kws00Params[path_key].(string)
+				path := kws00Params[path_key]
+				if path == nil {
+					localPattern = ""
+				} else {
+					localPattern = fmt.Sprintf("%v", path)
+				}
 				params[0] = kws00Params
 			}
 		}
@@ -312,14 +317,12 @@ type LocationHandle func(server IAgServer, pattern string, params ...interface{}
 // defaultLocationHandle 默认LocationHandle，使用随机分配算法
 func defaultLocationHandle(server IAgServer, pattern string, params ...interface{}) ILocationConf {
 	aglc := defaultLocationConf
-	if len(pattern) > 0 {
+	if len(pattern) >= 0 {
 		locations := server.GetConf().GetLocationConfs()
 		if locations != nil {
-			if len(pattern) > 0 {
-				lc, found := locations[pattern]
-				if found {
-					aglc = lc
-				}
+			lc, found := locations[pattern]
+			if found {
+				aglc = lc
 			}
 		}
 		if aglc == nil {

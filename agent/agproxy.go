@@ -129,7 +129,6 @@ func (proxy *Proxy) OnDstChannelMsgHandle(packet channel.IPacket) error {
 	}
 	logx.Warn("unknown dst ProxyWrite.")
 	return nil
-	return nil
 }
 
 func onDstChannelRetHandle(protocol channel.Protocol) func(dstChannel channel.IChannel, packet channel.IPacket) error {
