@@ -185,13 +185,15 @@ func (proxy *Proxy) ClearAgentChannel(agentChannel channel.IChannel) {
 func (proxy *Proxy) ClearDstChannel(dstChannel channel.IChannel) {
 	dstChId := dstChannel.GetId()
 	agentCh, found := proxy.GetAgentChannelMap().Get(dstChId)
+	logx.Infof("agentch found:%v, dstChId:%v", found, dstChId)
 	if found {
-		agetnChannel, ok := agentCh.(channel.Channel)
+		agentCh, ok := agentCh.(channel.IChannel)
 		if ok {
-			agetnChannel.Stop()
-			proxy.GetDstChannelMap().Remove(agetnChannel.GetId())
+			agentCh.Stop()
+			agentChId := agentCh.GetId()
+			proxy.GetDstChannelMap().Remove(agentChId)
 		}
-		proxy.GetAgentChannelMap().Remove(agetnChannel.GetId())
+		proxy.GetAgentChannelMap().Remove(dstChId)
 		proxy.GetDstChannelPool().Remove(dstChId)
 	}
 }
