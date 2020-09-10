@@ -43,7 +43,7 @@ type AgServer struct {
 
 // NewAgServer 创建代理服务端
 // parent 父节点，见IService.
-// agServerConf 不可为空
+// AgServerConf 不可为空
 func NewAgServer(parent interface{}, agServerConf IAgServerConf) *AgServer {
 	if agServerConf == nil {
 		err := "conf is nil"
@@ -93,11 +93,12 @@ func (ags *AgServer) Start() error {
 	case gch.PROTOCOL_WS:
 		chHandle := gch.NewDefChHandle(ags.onAgentChannelMsgHandle)
 		chHandle.SetOnRegisteredHandle(ags.onAgentChannelRegHandle)
-		wsServerStrap := bootstrap.NewWsServerStrap(ags, serverConf.(*bootstrap.WsServerConf), chHandle, nil)
+		wsServerConf := (bootstrap.IServerConf(serverConf)).(*bootstrap.WsServerConf)
+		wsServerStrap := bootstrap.NewWsServerStrap(ags, wsServerConf, chHandle, nil)
 		serverStrap = wsServerStrap
 	case gch.PROTOCOL_HTTP:
 	case gch.PROTOCOL_KWS00:
-		kwsServerStrap := bootstrap.NewKws00ServerStrap(ags, serverConf.(*bootstrap.Kw00ServerConf),
+		kwsServerStrap := bootstrap.NewKws00ServerStrap(ags, serverConf,
 			ags.onAgentChannelMsgHandle, ags.onAgentChannelRegHandle, nil)
 		serverStrap = kwsServerStrap
 		break
@@ -273,7 +274,7 @@ const Activating_Key = "activating"
 
 func (ags *AgServer) onAgentChannelRegHandle(agentChannel gch.IChannel, packet gch.IPacket) error {
 	// TODO filter的处理
-	// filterConfs := ags.GetServerConf().GetServerConf().GetFilterConfs()
+	// FilterConfs := ags.GetServerConf().GetServerConf().GetFilterConfs()
 
 	// 步骤：
 	// 先获取(可先认证)location->获取(可先认证)upstream->执行负载均衡算法->获取到clientconf
@@ -281,14 +282,14 @@ func (ags *AgServer) onAgentChannelRegHandle(agentChannel gch.IChannel, packet g
 	localPattern, params := ags.GetLocationPattern(agentChannel, packet)
 	location := ags.locationHandle(ags, localPattern)
 	if location == nil {
-		s := "handle localtion error, pattern:" + localPattern
+		s := "handle localtion error, Pattern:" + localPattern
 		logx.Error(s)
 		return errors.New(s)
 	}
 
 	// 2、通过负载均衡获取client配置
 	upstreamId := location.GetUpstreamId()
-	logx.Debug("upstreamId:", upstreamId)
+	logx.Debug("UpstreamId:", upstreamId)
 	upsStreams := ags.GetParent().(IService).GetUpstreams()
 	ups, found := upsStreams[upstreamId]
 	if found {
@@ -310,13 +311,13 @@ func (ags *AgServer) onAgentChannelRegHandle(agentChannel gch.IChannel, packet g
 const Opcode_Key = "opcode"
 
 // locationHandle 获取location，以便确认upstream的处理
-// pattern 匹配路径
+// Pattern 匹配路径
 // params 任意参数
 type LocationHandle func(server IAgServer, pattern string, params ...interface{}) ILocationConf
 
 // defaultLocationHandle 默认LocationHandle，使用随机分配算法
 func defaultLocationHandle(server IAgServer, pattern string, params ...interface{}) ILocationConf {
-	aglc := defaultLocationConf
+	var aglc ILocationConf
 	if len(pattern) >= 0 {
 		locations := server.GetConf().GetLocationConfs()
 		if locations != nil {
@@ -325,12 +326,9 @@ func defaultLocationHandle(server IAgServer, pattern string, params ...interface
 				aglc = lc
 			}
 		}
-		if aglc == nil {
-			logx.Warnf("pattern:%v, locationConf is nil", pattern)
-		}
 	}
-	logx.Debugf("pattern:%v, locationConf:%v", pattern, aglc.GetUpstreamId())
+	if aglc == nil {
+		logx.Warnf("Pattern:%v, locationConf is nil", pattern)
+	}
 	return aglc
 }
-
-var defaultLocationConf ILocationConf = NewLocationConf("", "", nil)

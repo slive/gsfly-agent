@@ -1,10 +1,9 @@
 @startuml
-
-[*] --> clientchannel
+[*] -> clientchannel
 state agentservice{
-    clientchannel-->agentserver :远程调用
-    agentserver-->agentserver :建立agent端的channel
-    agentserver --> agentchannel:启用agentchannel
+    clientchannel-[#green]-->agentserver :远程调用
+    agentserver->agentserver :建立agent端的channel
+    agentserver -> agentchannel:启用agentchannel
     agentchannel --> filter:可选
     state upstream{
         agentchannel --> upstreamlocation

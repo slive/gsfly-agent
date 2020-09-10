@@ -5,19 +5,52 @@
 package agent
 
 import (
+	"errors"
 	"github.com/Slive/gsfly/bootstrap"
 	"github.com/Slive/gsfly/channel"
 	"time"
 )
 
-type LoadBalanceType int
+type LoadBalanceType string
 
 const (
-	LOADBALANCE_DEFAULT       = LoadBalanceType(0)
-	LOADBALANCE_WEIGHT        = LoadBalanceType(1)
-	LOADBALANCE_IPHASH        = LoadBalanceType(2)
-	LOADBALANCE_IPHASH_WEIGHT = LoadBalanceType(3)
+	LOADBALANCE_DEFAULT       = LoadBalanceType("default")
+	LOADBALANCE_WEIGHT        = LoadBalanceType("weight")
+	LOADBALANCE_IPHASH        = LoadBalanceType("iphash")
+	LOADBALANCE_IPHASH_WEIGHT = LoadBalanceType("ipsh_weight")
+	LOADBALANCE_UNKNOW        = LoadBalanceType("unknown")
 )
+
+// String 获取协议对应的字符串
+func (p LoadBalanceType) String() string {
+	switch p {
+	case LOADBALANCE_DEFAULT:
+		return "default"
+	case LOADBALANCE_WEIGHT:
+		return "weight"
+	case LOADBALANCE_IPHASH:
+		return "iphash"
+	case LOADBALANCE_IPHASH_WEIGHT:
+		return "ipsh_weight"
+	default:
+		return "unknown"
+	}
+}
+
+func GetLoadBalanceType(lbtype string) (LoadBalanceType, error) {
+	switch lbtype {
+	case LOADBALANCE_IPHASH.String():
+		return LOADBALANCE_IPHASH, nil
+	case LOADBALANCE_WEIGHT.String():
+		return LOADBALANCE_WEIGHT, nil
+	case LOADBALANCE_IPHASH_WEIGHT.String():
+		return LOADBALANCE_IPHASH_WEIGHT, nil
+	case LOADBALANCE_DEFAULT.String():
+		return LOADBALANCE_DEFAULT, nil
+	default:
+		return LOADBALANCE_UNKNOW, errors.New("unknown type")
+	}
+}
 
 // ILoadBalance 负载均衡接口
 type ILoadBalance interface {

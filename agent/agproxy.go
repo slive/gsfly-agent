@@ -16,19 +16,20 @@ type IProxy interface {
 
 type Proxy struct {
 	Upstream
-
-	LoadBalance LoadBalance
+	ProxyConf IProxyConf
 }
 
 func NewProxy(parent interface{}, proxyConf IProxyConf) *Proxy {
 	p := &Proxy{}
 	p.Upstream = *NewUpstream(parent, proxyConf)
+	p.ProxyConf = proxyConf
 	return p
 }
 
 func (proxy *Proxy) SelectDstChannel(ctx *UpstreamContext) {
 	lbsCtx := NewLbContext(nil, proxy, ctx.Channel)
-	lbhandle := localBalanceHandles[proxy.LoadBalance.GetType()]
+	lbhandle := localBalanceHandles[proxy.ProxyConf.GetLoadBalanceType()]
+	// TODO ...
 	lbhandle(lbsCtx)
 	clientConf := lbsCtx.DstClientConf
 
@@ -131,7 +132,7 @@ func (proxy *Proxy) OnDstChannelMsgHandle(packet channel.IPacket) error {
 	return nil
 }
 
-func onDstChannelRetHandle(protocol channel.Protocol) func(dstChannel channel.IChannel, packet channel.IPacket) error {
+func onDstChannelRetHandle(protocol channel.Network) func(dstChannel channel.IChannel, packet channel.IPacket) error {
 	return func(dstChannel channel.IChannel, packet channel.IPacket) error {
 		if protocol == channel.PROTOCOL_KWS00 {
 			dstChannel.AddAttach(Activating_Key, true)
