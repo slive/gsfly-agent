@@ -142,14 +142,16 @@ func initUpstreamConfs(config map[string]string) []agent.IUpstreamConf {
 				upsIds = strings.Split(upId, ";")
 			} else if strings.Index(upId, ",") > 0 {
 				upsIds = strings.Split(upId, ",")
+			} else {
+				upsIds = []string{upId}
 			}
 
 			if upsIds == nil {
 				logx.Panic("invalid upstreamId")
 			}
 
-			upstreamConfs = make([]agent.IUpstreamConf, len(upsIds))
-			for index, upsId := range upsIds {
+			// upstreamConfs = make([]agent.IUpstreamConf, len(upsIds))
+			for _, upsId := range upsIds {
 				upsTypeKey := "agent.upstream." + upsId + ".type"
 				upsType := upstreamMap[upsTypeKey]
 				delete(upstreamMap, upsTypeKey)
@@ -229,14 +231,14 @@ func initUpstreamConfs(config map[string]string) []agent.IUpstreamConf {
 				}
 
 				var upstreamConf agent.IUpstreamConf
-				if len(upsType) <= 0 || upsType == agent.UPSTREAM_PROXY || dstClientConfs != nil {
+				if (len(upsType) <= 0 || upsType == agent.UPSTREAM_PROXY) && (dstClientConfs != nil) {
 					upstreamConf = agent.NewProxyConf(upsId, loadbalance, dstClientConfs...)
 				} else {
 					// TODO...
 				}
 				logx.Info("upstreamConf:", upstreamConf)
 				if upstreamConf != nil {
-					upstreamConfs[index] = upstreamConf
+					upstreamConfs = append(upstreamConfs, upstreamConf)
 				}
 			}
 		} else {
@@ -304,12 +306,16 @@ func initLocations(config map[string]string) []agent.ILocationConf {
 	if lcSize > 0 {
 		index := 0
 		for {
-			patternKey := fmt.Sprintf("agent.server.location.%v.pattern", index)
 			upstreamIdKey := fmt.Sprintf("agent.server.location.%v.upstreamId", index)
-			pattern := locationMap[patternKey]
 			upstreamId := locationMap[upstreamIdKey]
-			if len(pattern) <= 0 || len(upstreamId) <= 0 {
+			if len(upstreamId) <= 0 {
 				break
+			}
+
+			patternKey := fmt.Sprintf("agent.server.location.%v.pattern", index)
+			pattern := locationMap[patternKey]
+			if len(pattern) <= 0 {
+				pattern = ""
 			}
 			locationConf := agent.NewLocationConf(pattern, upstreamId, nil)
 			logx.Info("locationConf:", locationConf)

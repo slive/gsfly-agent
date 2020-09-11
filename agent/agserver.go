@@ -317,7 +317,7 @@ type LocationHandle func(server IAgServer, pattern string, params ...interface{}
 
 // defaultLocationHandle 默认LocationHandle，使用随机分配算法
 func defaultLocationHandle(server IAgServer, pattern string, params ...interface{}) ILocationConf {
-	var aglc ILocationConf
+	aglc := defaultLocationConf
 	if len(pattern) >= 0 {
 		locations := server.GetConf().GetLocationConfs()
 		if locations != nil {
@@ -326,9 +326,13 @@ func defaultLocationHandle(server IAgServer, pattern string, params ...interface
 				aglc = lc
 			}
 		}
+		if aglc == nil {
+			logx.Warnf("Pattern:%v, locationConf is nil", pattern)
+		}
 	}
-	if aglc == nil {
-		logx.Warnf("Pattern:%v, locationConf is nil", pattern)
-	}
+	logx.Debugf("Pattern:%v, locationConf:%v", pattern, aglc.GetUpstreamId())
 	return aglc
 }
+
+var defaultLocationConf ILocationConf = NewLocationConf("", "", nil)
+
