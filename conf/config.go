@@ -2,7 +2,7 @@
  * Author:slive
  * DATE:2020/9/10
  */
-package main
+package conf
 
 import (
 	"fmt"
@@ -55,7 +55,7 @@ func InitServiceConf(config map[string]string) agent.IServiceConf {
 
 	channel.InitChannelConfs(readPoolConf, channelConf)
 
-	agentId := config["agent.id"]
+	agentId := config["agent.server.id"]
 	if len(agentId) <= 0 {
 		agentId = fmt.Sprintf("agent-%v", rand.Int())
 	}
@@ -217,6 +217,8 @@ func initUpstreamConfs(config map[string]string) []agent.IUpstreamConf {
 						dstPath := upstreamMap[dstPathKey]
 						delete(upstreamMap, dstPathKey)
 						dstClientConf = bootstrap.NewKws00ClientConf(dstIp, dstPort, dstPath)
+					}else{
+						logx.Panic("dstclient network is nil, key:",dstNetworkKey)
 					}
 					logx.Info("dstClientConf:", dstClientConf)
 					if dstClientConf != nil {
