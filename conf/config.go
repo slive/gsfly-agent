@@ -17,31 +17,18 @@ import (
 	"time"
 )
 
-const (
-	key_prefix_agent        = "agent"
-	key_ch_readTimeout      = "channel.readTimeout"
-	key_ch_writeTimeout     = "channel.writeTimeout"
-	key_ch_readBufSize      = "channel.readBufSize"
-	key_ch_writeBufSize     = "channel.writeBufSize"
-	key_ch_closeRevFailTime = "channel.closeRevFailTime"
-
-	// agent.channel.readBufSize = 102400
-	// ## 写最大限制
-	// agent.channel.writeBufSize = 102400
-	// ## 接收失败n次后，关闭channel
-	// agent.channel.closeRevFailTime = 3
-)
+var logDirKey = "agent.log.dir"
+var logFileKey = "agent.log.file"
+var logLevelKey = "agent.log.level"
+var serverIdKey = "agent.server.id"
 
 func InitServiceConf(config map[string]string) agent.IServiceConf {
-	logDirKey := "agent.log.dir"
 	logDir := config[logDirKey]
 	delete(config, logDirKey)
 
-	logFileKey := "agent.log.file"
 	logFile := config[logFileKey]
 	delete(config, logFileKey)
 
-	logLevelKey := "agent.log.level"
 	logLevel := config[logLevelKey]
 	delete(config, logLevelKey)
 
@@ -55,7 +42,7 @@ func InitServiceConf(config map[string]string) agent.IServiceConf {
 
 	channel.InitChannelConfs(readPoolConf, channelConf)
 
-	agentId := config["agent.server.id"]
+	agentId := config[serverIdKey]
 	if len(agentId) <= 0 {
 		agentId = fmt.Sprintf("agent-%v", rand.Int())
 	}
@@ -93,8 +80,10 @@ func initLogConf(logFile string, logDir string, logLevel string) {
 	logx.Info("logConf:", logConf)
 }
 
+var readPoolKey = "agent.readpool.maxCpuSize"
+var readQueueKey = "agent.readqueue.maxSize"
+
 func initReadPoolConf(config map[string]string) *channel.ReadPoolConf {
-	readPoolKey := "agent.readpool.maxCpuSize"
 	readPoolStr := config[readPoolKey]
 	delete(config, readPoolKey)
 	readPoolSize := channel.MAX_READ_POOL_EVERY_CPU
@@ -107,7 +96,6 @@ func initReadPoolConf(config map[string]string) *channel.ReadPoolConf {
 		}
 	}
 
-	readQueueKey := "agent.readqueue.maxSize"
 	readQueueStr := config[readQueueKey]
 	delete(config, readQueueKey)
 	readQueueSize := channel.MAX_READ_QUEUE_SIZE
@@ -123,21 +111,25 @@ func initReadPoolConf(config map[string]string) *channel.ReadPoolConf {
 	return readPoolConf
 }
 
+var upsPrefix = "agent.upstream."
+var upsIdKey = upsPrefix + "id"
+
 func initUpstreamConfs(config map[string]string) []agent.IUpstreamConf {
 	var upstreamConfs []agent.IUpstreamConf
 	upstreamMap := make(map[string]string)
 	for key, v := range config {
-		if strings.Contains(key, "agent.upstream") {
+		if strings.Contains(key, upsPrefix) {
 			delete(config, key)
 			upstreamMap[key] = v
 		}
 	}
+
 	if len(upstreamMap) > 0 {
-		upsIdKey := "agent.upstream.id"
 		upId := upstreamMap[upsIdKey]
 		delete(config, upsIdKey)
 		if len(upId) > 0 {
 			var upsIds []string
+			// 多个upstreamId，支持";"或者","分割
 			if strings.Index(upId, ";") > 0 {
 				upsIds = strings.Split(upId, ";")
 			} else if strings.Index(upId, ",") > 0 {
@@ -145,22 +137,21 @@ func initUpstreamConfs(config map[string]string) []agent.IUpstreamConf {
 			} else {
 				upsIds = []string{upId}
 			}
-
 			if upsIds == nil {
 				logx.Panic("invalid upstreamId")
 			}
 
-			// upstreamConfs = make([]agent.IUpstreamConf, len(upsIds))
 			for _, upsId := range upsIds {
-				upsTypeKey := "agent.upstream." + upsId + ".type"
+				upsTypeKey := upsPrefix + upsId + ".type"
 				upsType := upstreamMap[upsTypeKey]
 				delete(upstreamMap, upsTypeKey)
-				upsLbKey := "agent.upstream." + upsId + ".loadBalance"
+
+				upsLbKey := upsPrefix + upsId + ".loadBalance"
 				loadBalanceStr := upstreamMap[upsLbKey]
 				delete(upstreamMap, upsLbKey)
 
 				var dstClientConfs []bootstrap.IClientConf
-				dtsKey := "agent.upstream." + upsId + ".dstclient"
+				dtsKey := upsPrefix + upsId + ".dstclient"
 				var loadbalance agent.LoadBalanceType
 				var err error
 				if len(loadBalanceStr) <= 0 {
@@ -194,11 +185,12 @@ func initUpstreamConfs(config map[string]string) []agent.IUpstreamConf {
 						}
 						dstPort = int(retInt)
 					}
+
 					dstNetworkKey := indexKey + "network"
 					network := upstreamMap[dstNetworkKey]
 					delete(upstreamMap, dstNetworkKey)
 					var dstClientConf bootstrap.IClientConf
-					if network == channel.PROTOCOL_WS.String() {
+					if network == channel.NETWORK_WS.String() {
 						dstSchemeKey := indexKey + "scheme"
 						dstScheme := upstreamMap[dstSchemeKey]
 						logx.Info(dstSchemeKey + "=" + dstScheme)
@@ -212,14 +204,15 @@ func initUpstreamConfs(config map[string]string) []agent.IUpstreamConf {
 						dstSubrotocol := upstreamMap[dstSubprotocolKey]
 						delete(upstreamMap, dstSubprotocolKey)
 						dstClientConf = bootstrap.NewWsClientConf(dstIp, dstPort, dstScheme, dstPath, dstSubrotocol)
-					} else if network == channel.PROTOCOL_KWS00.String() {
+					} else if network == channel.NETWORK_KWS00.String() {
 						dstPathKey := indexKey + ".path"
 						dstPath := upstreamMap[dstPathKey]
 						delete(upstreamMap, dstPathKey)
 						dstClientConf = bootstrap.NewKws00ClientConf(dstIp, dstPort, dstPath)
-					}else{
-						logx.Panic("dstclient network is nil, key:",dstNetworkKey)
+					} else {
+						logx.Panic("dstclient network is nil, key:", dstNetworkKey)
 					}
+
 					logx.Info("dstClientConf:", dstClientConf)
 					if dstClientConf != nil {
 						if dstClientConfs == nil {
@@ -250,13 +243,22 @@ func initUpstreamConfs(config map[string]string) []agent.IUpstreamConf {
 	return upstreamConfs
 }
 
+var serverIpKey = "agent.server.ip"
+var serverPortKey = "agent.server.port"
+var serverNetworkKey = "agent.server.network"
+var serverMaxChSizeKey = "agent.server.maxChannelSize"
+var serverWsSchemeKey = "agent.server.scheme"
+var serverWsPathKey = "agent.server.path"
+var serverWsSubKey = "agent.server.subprotocol"
+
 func initServerConf(config map[string]string, agentId string) bootstrap.IServerConf {
-	serverIp := config["agent.server.ip"]
+	serverIp := config[serverIpKey]
 	if len(serverIp) <= 0 {
 		// 本地ip
 		serverIp = ""
 	}
-	portStr := config["agent.server.port"]
+
+	portStr := config[serverPortKey]
 	port := 9080
 	if len(portStr) > 0 {
 		retId, err := strconv.ParseInt(portStr, 10, 32)
@@ -266,11 +268,12 @@ func initServerConf(config map[string]string, agentId string) bootstrap.IServerC
 			port = int(retId)
 		}
 	}
-	network := config["agent.server.network"]
+	network := config[serverNetworkKey]
 	if len(network) <= 0 {
-		network = channel.PROTOCOL_WS.String()
+		network = channel.NETWORK_WS.String()
 	}
-	maxChannelSizeStr := config["agent.server.maxChannelSize"]
+
+	maxChannelSizeStr := config[serverMaxChSizeKey]
 	maxChannelSize := 0
 	if len(maxChannelSizeStr) > 0 {
 		retId, err := strconv.ParseInt(portStr, 10, 32)
@@ -280,24 +283,27 @@ func initServerConf(config map[string]string, agentId string) bootstrap.IServerC
 			maxChannelSize = int(retId)
 		}
 	}
+
 	var serverConf bootstrap.IServerConf
-	if network == channel.PROTOCOL_KWS00.String() {
+	if network == channel.NETWORK_KWS00.String() {
 		serverConf = bootstrap.NewKw00ServerConf(serverIp, port)
 		serverConf.SetMaxChannelSize(maxChannelSize)
-	} else if network == channel.PROTOCOL_WS.String() {
-		scheme := config["agent.server.scheme"]
-		path := config["agent.server.path"]
-		subprotocol := config["agent.server.subprotocol"]
+	} else if network == channel.NETWORK_WS.String() {
+		scheme := config[serverWsSchemeKey]
+		path := config[serverWsPathKey]
+		subprotocol := config[serverWsSubKey]
 		serverConf = bootstrap.NewWsServerConf(serverIp, port, scheme, path, subprotocol)
 		serverConf.SetMaxChannelSize(maxChannelSize)
 	}
 	return serverConf
 }
 
+var serverLocationKey = "agent.server.location"
+
 func initLocations(config map[string]string) []agent.ILocationConf {
 	locationMap := make(map[string]string)
 	for key, v := range config {
-		if strings.Contains(key, "agent.server.location") {
+		if strings.Contains(key, serverLocationKey) {
 			delete(config, key)
 			locationMap[key] = v
 		}
@@ -333,9 +339,16 @@ func initLocations(config map[string]string) []agent.ILocationConf {
 	return locationConfs
 }
 
+var key_prefix_agent = "agent."
+var key_ch_readTimeout = key_prefix_agent + "channel.readTimeout"
+var key_ch_writeTimeout = key_prefix_agent + "channel.writeTimeout"
+var key_ch_readBufSize = key_prefix_agent + "channel.readBufSize"
+var key_ch_writeBufSize = key_prefix_agent + "channel.writeBufSize"
+var key_ch_closeRevFailTime = key_prefix_agent + "channel.closeRevFailTime"
+
 func initChannelConf(config map[string]string) *channel.ChannelConf {
-	defChConf := channel.NewDefChannelConf(channel.PROTOCOL_WS)
-	readBufSize := config[key_prefix_agent+"."+key_ch_readBufSize]
+	defChConf := channel.NewDefChannelConf(channel.NETWORK_WS)
+	readBufSize := config[key_ch_readBufSize]
 	if len(readBufSize) > 0 {
 		retInt, err := strconv.ParseInt(readBufSize, 10, 32)
 		if err == nil {
@@ -345,7 +358,7 @@ func initChannelConf(config map[string]string) *channel.ChannelConf {
 		}
 	}
 
-	writeBufSize := config[key_prefix_agent+"."+key_ch_writeBufSize]
+	writeBufSize := config[key_ch_writeBufSize]
 	if len(writeBufSize) > 0 {
 		retInt, err := strconv.ParseInt(writeBufSize, 10, 32)
 		if err == nil {
@@ -364,7 +377,7 @@ func initChannelConf(config map[string]string) *channel.ChannelConf {
 		}
 	}
 
-	writeTimeout := config[key_prefix_agent+"."+key_ch_writeTimeout]
+	writeTimeout := config[key_ch_writeTimeout]
 	if len(writeTimeout) > 0 {
 		retInt, err := strconv.ParseInt(writeTimeout, 10, 32)
 		if err == nil {
@@ -373,7 +386,7 @@ func initChannelConf(config map[string]string) *channel.ChannelConf {
 			logx.Info("error:", err)
 		}
 	}
-	closeRevFailTime := config[key_prefix_agent+"."+key_ch_closeRevFailTime]
+	closeRevFailTime := config[key_ch_closeRevFailTime]
 	if len(closeRevFailTime) > 0 {
 		retInt, err := strconv.ParseInt(closeRevFailTime, 10, 32)
 		if err == nil {

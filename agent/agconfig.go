@@ -28,11 +28,11 @@ type ServiceConf struct {
 
 	common.Id
 
-	AgServerConf IAgServerConf `json:"agent"`
+	AgServerConf IAgServerConf
 
-	UpstreamConfs map[string]IUpstreamConf `json:"upstreams"`
+	UpstreamConfs map[string]IUpstreamConf
 
-	FilterConfs map[string]IFilterConf `json:"filters"`
+	FilterConfs map[string]IFilterConf
 }
 
 func NewServiceConf(id string, agServerConf IAgServerConf, upstreamConfs ...IUpstreamConf) *ServiceConf {
@@ -101,9 +101,9 @@ type AgServerConf struct {
 
 	common.Parent
 
-	ServerConf bootstrap.IServerConf `json:"server"`
+	ServerConf bootstrap.IServerConf
 
-	LocationConfs []ILocationConf `json:"locationcs"`
+	LocationConfs []ILocationConf
 
 	locationConfMap map[string]ILocationConf
 
@@ -171,10 +171,10 @@ type FilterConf struct {
 
 	common.Id
 
-	Pattern string `json:"pattern"`
+	Pattern string
 
 	// 可变配置
-	ExtConf map[string]interface{} `json:"ext"`
+	ExtConf map[string]interface{}
 }
 
 func NewFilterConf(id string, pattern string, extConf map[string]interface{}) *FilterConf {
@@ -222,12 +222,12 @@ type ILocationConf interface {
 type LocationConf struct {
 	common.Parent
 
-	Pattern string `json:"pattern"`
+	Pattern string
 
-	UpstreamId string `json:"upstreamId"`
+	UpstreamId string
 
 	// 可变配置
-	ExtConf map[string]interface{} `json:"extConf"`
+	ExtConf map[string]interface{}
 }
 
 func NewLocationConf(pattern string, upstreamId string, extConf map[string]interface{}) *LocationConf {

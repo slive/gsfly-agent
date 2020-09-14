@@ -39,29 +39,29 @@ func (proxy *Proxy) SelectDstChannel(ctx *UpstreamContext) {
 	logx.Info("select params:", params)
 	agentCh := ctx.Channel
 	var clientStrap bootstrap.IClientStrap
-	clientPro := clientConf.GetProtocol()
+	clientPro := clientConf.GetNetwork()
 	switch clientPro {
-	case channel.PROTOCOL_WS, channel.PROTOCOL_HTTPX:
+	case channel.NETWORK_WS, channel.NETWORK_HTTPX:
 		handle := channel.NewDefChHandle(proxy.OnDstChannelMsgHandle)
 		wsClientConf := clientConf.(*bootstrap.WsClientConf)
 		handle.SetOnRegisteredHandle(onDstChannelRetHandle(clientPro))
 		clientStrap = bootstrap.NewWsClientStrap(proxy, wsClientConf, handle, params)
-	case channel.PROTOCOL_HTTP:
+	case channel.NETWORK_HTTP:
 		break
-	case channel.PROTOCOL_KWS00:
+	case channel.NETWORK_KWS00:
 		kwsClientConf := clientConf.(*bootstrap.Kws00ClientConf)
 		clientStrap = bootstrap.NewKws00ClientStrap(proxy, kwsClientConf, proxy.OnDstChannelMsgHandle,
 			onDstChannelRetHandle(clientPro), nil, params)
-	case channel.PROTOCOL_KWS01:
+	case channel.NETWORK_KWS01:
 		break
-	case channel.PROTOCOL_TCP:
+	case channel.NETWORK_TCP:
 		break
-	case channel.PROTOCOL_UDP:
+	case channel.NETWORK_UDP:
 		break
-	case channel.PROTOCOL_KCP:
+	case channel.NETWORK_KCP:
 		break
 	default:
-		// channel.PROTOCOL_WS
+		// channel.NETWORK_WS
 	}
 
 	found := (clientStrap != nil)
@@ -91,9 +91,9 @@ func (proxy *Proxy) OnDstChannelMsgHandle(packet channel.IPacket) error {
 	if found {
 		ProxyWrite(packet, agentChannel)
 		return nil
-		// protocol := agentChannel.GetConf().GetProtocol()
+		// protocol := agentChannel.GetConf().GetNetwork()
 		// switch protocol {
-		// case channel.PROTOCOL_WS, channel.PROTOCOL_HTTPX:
+		// case channel.NETWORK_WS, channel.NETWORK_HTTPX:
 		// 	// 回写，区分第一次，最后一次等？
 		// 	wsChannel := agentChannel.(*httpx.WsChannel)
 		// 	srcPacket := wsChannel.NewPacket().(*httpx.WsPacket)
@@ -101,8 +101,8 @@ func (proxy *Proxy) OnDstChannelMsgHandle(packet channel.IPacket) error {
 		// 	srcPacket.MsgType = websocket.TextMessage
 		// 	agentChannel.Write(srcPacket)
 		// 	return nil
-		// case channel.PROTOCOL_HTTP:
-		// case channel.PROTOCOL_KWS00:
+		// case channel.NETWORK_HTTP:
+		// case channel.NETWORK_KWS00:
 		// 	// 回写，区分第一次，最后一次等？
 		// 	opcode := gkcp.OPCODE_TEXT_SIGNALLING
 		// 	oc := agentChannel.GetAttach(Opcode_Key)
@@ -117,13 +117,13 @@ func (proxy *Proxy) OnDstChannelMsgHandle(packet channel.IPacket) error {
 		// 	srcPacket.SetData(frame.GetKcpData())
 		// 	agentChannel.Write(srcPacket)
 		// 	return nil
-		// case channel.PROTOCOL_KWS01:
+		// case channel.NETWORK_KWS01:
 		// 	break
-		// case channel.PROTOCOL_TCP:
+		// case channel.NETWORK_TCP:
 		// 	break
-		// case channel.PROTOCOL_UDP:
+		// case channel.NETWORK_UDP:
 		// 	break
-		// case channel.PROTOCOL_KCP:
+		// case channel.NETWORK_KCP:
 		// 	break
 		// default:
 		// }
@@ -134,7 +134,7 @@ func (proxy *Proxy) OnDstChannelMsgHandle(packet channel.IPacket) error {
 
 func onDstChannelRetHandle(protocol channel.Network) func(dstChannel channel.IChannel, packet channel.IPacket) error {
 	return func(dstChannel channel.IChannel, packet channel.IPacket) error {
-		if protocol == channel.PROTOCOL_KWS00 {
+		if protocol == channel.NETWORK_KWS00 {
 			dstChannel.AddAttach(Activating_Key, true)
 		}
 		logx.Info("register success:", dstChannel.GetId())

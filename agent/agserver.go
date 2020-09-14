@@ -86,30 +86,38 @@ func (ags *AgServer) Start() error {
 	logx.Info("start agserver, conf:", agServerConf)
 	serverConf := agServerConf.GetServerConf()
 	// 根据不同协议进行不同的操作
-	serverProtocol := serverConf.GetProtocol()
+	serverProtocol := serverConf.GetNetwork()
 	var serverStrap bootstrap.IServerStrap
 	switch serverProtocol {
-	case gch.PROTOCOL_HTTPX:
-	case gch.PROTOCOL_WS:
+	case gch.NETWORK_HTTPX:
+	case gch.NETWORK_WS:
 		chHandle := gch.NewDefChHandle(ags.onAgentChannelMsgHandle)
 		chHandle.SetOnRegisteredHandle(ags.onAgentChannelRegHandle)
-		wsServerConf := (bootstrap.IServerConf(serverConf)).(*bootstrap.WsServerConf)
+		wsServerConf := serverConf.(bootstrap.IWsServerConf)
 		wsServerStrap := bootstrap.NewWsServerStrap(ags, wsServerConf, chHandle, nil)
 		serverStrap = wsServerStrap
-	case gch.PROTOCOL_HTTP:
-	case gch.PROTOCOL_KWS00:
-		kwsServerStrap := bootstrap.NewKws00ServerStrap(ags, serverConf,
-			ags.onAgentChannelMsgHandle, ags.onAgentChannelRegHandle, nil)
+	case gch.NETWORK_HTTP:
+	case gch.NETWORK_KWS00:
+		kw00ServerConf := serverConf.(bootstrap.IKw00ServerConf)
+		chHandle := gkcp.NewKws00Handle(ags.onAgentChannelMsgHandle, ags.onAgentChannelRegHandle, nil)
+		kwsServerStrap := bootstrap.NewKws00ServerStrap1(ags, kw00ServerConf, chHandle)
 		serverStrap = kwsServerStrap
-		break
-	case gch.PROTOCOL_KCP:
-		break
-	case gch.PROTOCOL_TCP:
-		break
-	case gch.PROTOCOL_UDP:
-		break
-	case gch.PROTOCOL_KWS01:
-		break
+	case gch.NETWORK_KWS01:
+		// TODO
+	case gch.NETWORK_KCP:
+		chHandle := gch.NewDefChHandle(ags.onAgentChannelMsgHandle)
+		chHandle.SetOnRegisteredHandle(ags.onAgentChannelRegHandle)
+		kcpServerConf := serverConf.(bootstrap.IKcpServerConf)
+		kwsServerStrap := bootstrap.NewKcpServerStrap(ags, kcpServerConf, chHandle)
+		serverStrap = kwsServerStrap
+	case gch.NETWORK_TCP:
+		chHandle := gch.NewDefChHandle(ags.onAgentChannelMsgHandle)
+		chHandle.SetOnRegisteredHandle(ags.onAgentChannelRegHandle)
+		tcpServerConf := serverConf.(bootstrap.ITcpServerConf)
+		tcpServerStrap := bootstrap.NewTcpServerStrap(ags, tcpServerConf, chHandle)
+		serverStrap = tcpServerStrap
+	case gch.NETWORK_UDP:
+		// TODO
 	default:
 		errMsg := "unkonwn protocol, protocol:" + fmt.Sprintf("%v", serverProtocol)
 		logx.Error(errMsg)
@@ -183,15 +191,15 @@ func (ags *AgServer) onAgentChannelMsgHandle(packet gch.IPacket) error {
 func ProxyWrite(fromPacket gch.IPacket, toChannel gch.IChannel) {
 	fromChannel := fromPacket.GetChannel()
 	dstPacket := toChannel.NewPacket()
-	fromProtocol := fromChannel.GetConf().GetProtocol()
-	toProtocol := toChannel.GetConf().GetProtocol()
+	fromProtocol := fromChannel.GetConf().GetNetwork()
+	toProtocol := toChannel.GetConf().GetNetwork()
 	activating := fromChannel.GetAttach(Activating_Key)
 	logx.Debugf("from chId:%v, activating:%v", fromChannel.GetId(), activating)
 	// 根据不同的协议类型，转发到不同的目的dstChannel
 	switch fromProtocol {
-	case gch.PROTOCOL_WS:
+	case gch.NETWORK_WS:
 		switch toProtocol {
-		case gch.PROTOCOL_KWS00:
+		case gch.NETWORK_KWS00:
 			opCode := gkcp.OPCODE_TEXT_SIGNALLING
 			if activating != nil {
 				at, f := activating.(bool)
@@ -205,18 +213,18 @@ func ProxyWrite(fromPacket gch.IPacket, toChannel gch.IChannel) {
 			dstPacket.SetData(frame.GetKcpData())
 			// 用于代理回复后对应
 			fromChannel.AddAttach(Opcode_Key, frame.GetOpCode())
-		case gch.PROTOCOL_WS:
+		case gch.NETWORK_WS:
 			dstPacket.SetData(fromPacket.GetData())
 			dstPacket.(*httpx.WsPacket).MsgType = fromPacket.(*httpx.WsPacket).MsgType
 		default:
 			dstPacket.SetData(fromPacket.GetData())
 		}
-	case gch.PROTOCOL_KWS00:
+	case gch.NETWORK_KWS00:
 		frame := fromPacket.(*gkcp.KWS00Packet).Frame
 		switch toProtocol {
-		case gch.PROTOCOL_KWS00:
+		case gch.NETWORK_KWS00:
 			dstPacket.SetData(frame.GetKcpData())
-		case gch.PROTOCOL_WS:
+		case gch.NETWORK_WS:
 			dstPacket.SetData(frame.GetPayload())
 			dstPacket.(*httpx.WsPacket).MsgType = websocket.TextMessage
 		default:
@@ -232,17 +240,17 @@ func ProxyWrite(fromPacket gch.IPacket, toChannel gch.IChannel) {
 }
 
 func (ags *AgServer) GetLocationPattern(agentChannel gch.IChannel, packet gch.IPacket) (localPattern string, params []interface{}) {
-	protocol := agentChannel.GetConf().GetProtocol()
+	protocol := agentChannel.GetConf().GetNetwork()
 	localPattern = ""
 	params = make([]interface{}, 1)
 	switch protocol {
-	case gch.PROTOCOL_WS:
+	case gch.NETWORK_WS:
 		wsChannel := agentChannel.(*httpx.WsChannel)
 		params[0] = wsChannel.GetParams()
 		// 1、约定用path来限定路径
 		wsServerConf := wsChannel.GetConf().(bootstrap.IWsServerConf)
 		localPattern = wsServerConf.GetPath()
-	case gch.PROTOCOL_KWS00:
+	case gch.NETWORK_KWS00:
 		agentChId := agentChannel.GetId()
 		frame, ok := packet.GetAttach(gkcp.KCP_FRAME_KEY).(gkcp.Frame)
 		if !ok {
@@ -335,4 +343,3 @@ func defaultLocationHandle(server IAgServer, pattern string, params ...interface
 }
 
 var defaultLocationConf ILocationConf = NewLocationConf("", "", nil)
-
