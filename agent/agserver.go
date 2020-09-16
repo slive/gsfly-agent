@@ -76,10 +76,11 @@ func (ags *AgServer) Start() error {
 	agServerConf := ags.GetConf()
 	defer func() {
 		ret := recover()
+		scId := agServerConf.GetId()
 		if ret != nil {
-			logx.Warnf("finish to agserver, id:%v, ret:%v", agServerConf.GetId(), ret)
+			logx.Warnf("finish to agserver, id:%v, ret:%v", scId, ret)
 		} else {
-			logx.Info("finish to agserver, id:", agServerConf.GetId())
+			logx.Info("finish to agserver, id:", scId)
 		}
 	}()
 
@@ -90,13 +91,13 @@ func (ags *AgServer) Start() error {
 	var serverStrap bootstrap.IServerStrap
 	switch serverProtocol {
 	case gch.NETWORK_HTTPX:
+	case gch.NETWORK_HTTP:
 	case gch.NETWORK_WS:
 		chHandle := gch.NewDefChHandle(ags.onAgentChannelMsgHandle)
 		chHandle.SetOnRegisteredHandle(ags.onAgentChannelRegHandle)
 		wsServerConf := serverConf.(bootstrap.IWsServerConf)
 		wsServerStrap := bootstrap.NewWsServerStrap(ags, wsServerConf, chHandle, nil)
 		serverStrap = wsServerStrap
-	case gch.NETWORK_HTTP:
 	case gch.NETWORK_KWS00:
 		kw00ServerConf := serverConf.(bootstrap.IKw00ServerConf)
 		chHandle := gkcp.NewKws00Handle(ags.onAgentChannelMsgHandle, ags.onAgentChannelRegHandle, nil)
@@ -119,7 +120,7 @@ func (ags *AgServer) Start() error {
 	case gch.NETWORK_UDP:
 		// TODO
 	default:
-		errMsg := "unkonwn protocol, protocol:" + fmt.Sprintf("%v", serverProtocol)
+		errMsg := "unkonwn network:" + fmt.Sprintf("%v", serverProtocol)
 		logx.Error(errMsg)
 		return errors.New(errMsg)
 	}
@@ -165,7 +166,7 @@ func (ags *AgServer) onAgentChannelStopHandle(agentChannel gch.IChannel) error {
 	if ups != nil {
 		proxy, ok := ups.(IProxy)
 		if ok {
-			proxy.ClearAgentChannel(agentChannel)
+			proxy.ReleaseByAgentChannel(agentChannel)
 		}
 	}
 
@@ -176,7 +177,7 @@ func (ags *AgServer) onAgentChannelMsgHandle(packet gch.IPacket) error {
 	agentChannel := packet.GetChannel()
 	ups, found := agentChannel.GetAttach(Upstream_Attach_key).(IUpstream)
 	if found {
-		ctx := NewUpstreamContext(agentChannel, packet)
+		ctx := NewUpstreamContext(agentChannel, packet, true)
 		ups.QueryDstChannel(ctx)
 		dstCh, found := ctx.GetRet(), ctx.IsOk()
 		if found {
@@ -297,17 +298,16 @@ func (ags *AgServer) onAgentChannelRegHandle(agentChannel gch.IChannel, packet g
 
 	// 2、通过负载均衡获取client配置
 	upstreamId := location.GetUpstreamId()
-	logx.Debug("UpstreamId:", upstreamId)
+	logx.Debug("upstreamId:", upstreamId)
 	upsStreams := ags.GetParent().(IService).GetUpstreams()
 	ups, found := upsStreams[upstreamId]
 	if found {
-		context := NewUpstreamContext(agentChannel, packet, params...)
-		ups.SelectDstChannel(context)
+		context := NewUpstreamContext(agentChannel, packet, true, params...)
+		ups.CreateChannelPeer(context)
 		f := context.IsOk()
 		logx.Info("select ok:", f)
 		if f {
 			agentChannel.AddAttach(Upstream_Attach_key, ups)
-			// agentChannel.AddAttach(Activating_Key, true)
 			return nil
 		}
 	}

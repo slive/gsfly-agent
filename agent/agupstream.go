@@ -9,10 +9,10 @@ import (
 	"github.com/Slive/gsfly/channel"
 	"github.com/Slive/gsfly/common"
 	logx "github.com/Slive/gsfly/logger"
-	"github.com/Slive/gsfly/util"
 	"github.com/emirpasic/gods/maps/hashmap"
 )
 
+// IUpstream upstream接口
 type IUpstream interface {
 	common.IParent
 
@@ -20,35 +20,33 @@ type IUpstream interface {
 
 	GetDstChannelPool() *hashmap.Map
 
-	GetDstChannelMap() *hashmap.Map
+	GetChannelPeerMap() *hashmap.Map
 
-	GetAgentChannelMap() *hashmap.Map
+	GetChannelPeer(ctx *UpstreamContext) IChannelPeer
 
-	TakeChannnelKey(ctx *UpstreamContext) (routeId string)
-
-	SelectDstChannel(ctx *UpstreamContext)
+	CreateChannelPeer(ctx *UpstreamContext)
 
 	QueryDstChannel(ctx *UpstreamContext)
 
 	QueryAgentChannel(ctx *UpstreamContext)
 
-	ClearAgentChannel(agentChannel channel.IChannel)
+	ReleaseByAgentChannel(agentChannel channel.IChannel)
 
-	ClearDstChannel(dstChannel channel.IChannel)
+	ReleaseByDstChannel(dstChannel channel.IChannel)
 
-	Clear()
+	ReleaseAll()
 }
 
 type Upstream struct {
 	common.Parent
 
+	// 配置
 	Conf IUpstreamConf
 
+	// 记录目标端channel池，可以复用
 	DstChannelPool *hashmap.Map
 
-	AgentChannelMap *hashmap.Map
-
-	DstChannelMap *hashmap.Map
+	ChannelPeerMap *hashmap.Map
 }
 
 func NewUpstream(parent interface{}, upstreamConf IUpstreamConf) *Upstream {
@@ -59,10 +57,9 @@ func NewUpstream(parent interface{}, upstreamConf IUpstreamConf) *Upstream {
 	}
 
 	u := &Upstream{
-		Conf:            upstreamConf,
-		AgentChannelMap: hashmap.New(),
-		DstChannelMap:   hashmap.New(),
-		DstChannelPool:  hashmap.New(),
+		Conf: upstreamConf,
+		DstChannelPool: hashmap.New(),
+		ChannelPeerMap: hashmap.New(),
 	}
 	u.SetParent(parent)
 	return u
@@ -77,98 +74,45 @@ func (ups *Upstream) GetDstChannelPool() *hashmap.Map {
 	return ups.DstChannelPool
 }
 
-// GetDstChannelMap 记录AgentChannel, 主键为路由的出来的Id
-func (ups *Upstream) GetDstChannelMap() *hashmap.Map {
-	return ups.DstChannelMap
+// GetChannelPeerMap 获取channel对（agent/dst channel）
+func (ups *Upstream) GetChannelPeerMap() *hashmap.Map {
+	return ups.ChannelPeerMap
 }
 
-// GetAgentChannelMap 记录AgentChannel, 主键为路由的出来的Id
-func (ups *Upstream) GetAgentChannelMap() *hashmap.Map {
-	return ups.AgentChannelMap
-}
-
-func (ups *Upstream) TakeChannnelKey(ctx *UpstreamContext) (routeId string) {
+// GetChannelPeer 通过UpstreamContext获取到对应的channelpeer
+func (ups *Upstream) GetChannelPeer(ctx *UpstreamContext) IChannelPeer {
 	panic("implement me")
 }
 
-func (ups *Upstream) ClearAgentChannel(dstChannel channel.IChannel) {
-	panic("implement me")
+func (proxy *Proxy) QueryDstChannel(ctx *UpstreamContext) {
+	InnerQueryDstChannel(proxy, ctx)
 }
 
-func (ups *Upstream) ClearDstChannel(dstChannel channel.IChannel) {
-	panic("implement me")
-}
-
-type Route struct {
-	Upstream
-}
-
-func (route *Route) TakeChannnelKey(ctx *UpstreamContext) (routeId string) {
-	panic("implement me")
-
-}
-
-func (route *Route) SelectDstChannel(ctx *UpstreamContext) {
-	routeId := route.TakeChannnelKey(ctx)
-	if len(routeId) <= 0 {
-		logx.Error("routeId is nil, chId:", ctx.GetChannel().GetId())
-		return
-	}
-
-	var retChannel channel.IChannel
-	maxDstChannelSize := 0
-	if maxDstChannelSize > 0 {
-		// 有dstchannel限制
-		pool := util.Hashcode(routeId) % maxDstChannelSize
-		values := route.DstChannelPool.Values()
-		if pool < len(values) {
-			retChannel = values[pool].(channel.IChannel)
-		}
-	}
-
-	hadcreated := (retChannel != nil)
-	if hadcreated {
-		route.GetDstChannelMap().Put(routeId, retChannel)
-		route.GetAgentChannelMap().Put(routeId, ctx.Channel)
-		ctx.SetRet(retChannel)
-	} else {
-		// TODO 创建...
-		panic("wait create dstchannel")
-		// route.DstChannelMap.Put(routeId, retChannel)
-	}
+func (proxy *Proxy) QueryAgentChannel(ctx *UpstreamContext) {
+	InnerQueryAgentChannel(proxy, ctx)
 }
 
 func InnerQueryDstChannel(b IUpstream, ctx *UpstreamContext) {
-	logx.Info("query dst msg")
-	routeId := b.TakeChannnelKey(ctx)
-	if len(routeId) <= 0 {
-		logx.Error("routeId is nil, chId:", ctx.Channel.GetId())
-		return
-	}
-
-	ret, f := b.GetDstChannelMap().Get(routeId)
-	if f {
-		ctx.SetRet(ret.(channel.IChannel))
+	ret := b.GetChannelPeer(ctx)
+	if ret != nil {
+		peer := ret.(IChannelPeer)
+		ctx.SetRet(peer.GetDstChannel())
 	} else {
-		return
+		logx.Warn("query dst is not existed.")
 	}
 }
 
 func InnerQueryAgentChannel(b IUpstream, ctx *UpstreamContext) {
-	logx.Info("query agent msg")
-	routeId := b.TakeChannnelKey(ctx)
-	if len(routeId) <= 0 {
-		logx.Error("routeId is nil, chId:", ctx.Channel.GetId())
-		return
-	}
-
-	ret, f := b.GetAgentChannelMap().Get(routeId)
-	if f {
-		ctx.SetRet(ret.(channel.IChannel))
+	ret := b.GetChannelPeer(ctx)
+	if ret != nil {
+		peer := ret.(IChannelPeer)
+		ctx.SetRet(peer.GetAgentChannel())
+	} else {
+		logx.Warn("query agent is not existed.")
 	}
 }
 
-func (ups *Upstream) Clear() {
+func (ups *Upstream) ReleaseAll() {
 	upsId := ups.GetConf().GetId()
 	defer func() {
 		ret := recover()
@@ -179,8 +123,9 @@ func (ups *Upstream) Clear() {
 		}
 	}()
 	logx.Info("start to clear upstream, id:", upsId)
-	ups.GetDstChannelMap().Clear()
-	ups.GetAgentChannelMap().Clear()
+	ups.ChannelPeerMap.Clear()
+
+	// 释放所有dstpoolchannel
 	dstChPool := ups.GetDstChannelPool()
 	dstVals := dstChPool.Values()
 	for _, val := range dstVals {
@@ -215,8 +160,38 @@ func (uCtx *UpstreamContext) SetRet(ret channel.IChannel) {
 	}
 }
 
-func NewUpstreamContext(channel channel.IChannel, packet channel.IPacket, params ...interface{}) *UpstreamContext {
+func NewUpstreamContext(channel channel.IChannel, packet channel.IPacket, agent bool, params ...interface{}) *UpstreamContext {
 	u := &UpstreamContext{}
-	u.ProcessContext = *NewProcessContext(channel, packet, params...)
+	u.ProcessContext = *NewProcessContext(channel, packet, agent, params...)
 	return u
+}
+
+type IChannelPeer interface {
+	GetAgentChannel() channel.IChannel
+
+	GetDstChannel() channel.IChannel
+
+	common.IAttact
+}
+
+// ChannelPeer channel对（agent/dst channel）
+type ChannelPeer struct {
+	agentChannel channel.IChannel
+	dstChannel   channel.IChannel
+	common.Attact
+}
+
+func NewChannelPeer(agentChannel, dstChannel channel.IChannel) *ChannelPeer {
+	return &ChannelPeer{
+		agentChannel: agentChannel,
+		dstChannel:   agentChannel,
+	}
+}
+
+func (cp *ChannelPeer) GetAgentChannel() channel.IChannel {
+	return cp.agentChannel
+}
+
+func (cp *ChannelPeer) GetDstChannel() channel.IChannel {
+	return cp.dstChannel
 }

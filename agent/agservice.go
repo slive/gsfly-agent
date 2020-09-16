@@ -164,7 +164,7 @@ func (service *Service) Stop() {
 	// 清理upstream相关
 	upstreams := service.Upstreams
 	for _, upstream := range upstreams {
-		upstream.Clear()
+		upstream.ReleaseAll()
 		service.Upstreams = nil
 	}
 
@@ -184,11 +184,13 @@ type IInput interface {
 	GetChannel() channel.IChannel
 	GetPacket() channel.IPacket
 	GetParams() []interface{}
+	IsAgent() bool
 }
 
 type Input struct {
 	Channel channel.IChannel
 	Packet  channel.IPacket
+	Agent   bool
 	Params  []interface{}
 }
 
@@ -202,6 +204,10 @@ func (input *Input) GetPacket() channel.IPacket {
 
 func (input *Input) GetParams() []interface{} {
 	return input.Params
+}
+
+func (input *Input) IsAgent() bool {
+	return input.Agent
 }
 
 type IOutput interface {
@@ -231,11 +237,12 @@ type ProcessContext struct {
 	Output
 }
 
-func NewProcessContext(channel channel.IChannel, packet channel.IPacket, params ...interface{}) *ProcessContext {
+func NewProcessContext(channel channel.IChannel, packet channel.IPacket, agent bool, params ...interface{}) *ProcessContext {
 	u := &ProcessContext{}
 	u.Input = Input{
 		Channel: channel,
 		Packet:  packet,
+		Agent:   agent,
 		Params:  params,
 	}
 	return u
