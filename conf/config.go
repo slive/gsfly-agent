@@ -7,9 +7,9 @@ package conf
 import (
 	"fmt"
 	"github.com/Slive/gsfly-agent/agent"
-	"github.com/Slive/gsfly/bootstrap"
 	"github.com/Slive/gsfly/channel"
 	logx "github.com/Slive/gsfly/logger"
+	"github.com/Slive/gsfly/socket"
 	"math/rand"
 	"runtime"
 	"strconv"
@@ -150,7 +150,7 @@ func initUpstreamConfs(config map[string]string) []agent.IUpstreamConf {
 				loadBalanceStr := upstreamMap[upsLbKey]
 				delete(upstreamMap, upsLbKey)
 
-				var dstClientConfs []bootstrap.IClientConf
+				var dstClientConfs []socket.IClientConf
 				dtsKey := upsPrefix + upsId + ".dstclient"
 				var loadbalance agent.LoadBalanceType
 				var err error
@@ -189,7 +189,7 @@ func initUpstreamConfs(config map[string]string) []agent.IUpstreamConf {
 					dstNetworkKey := indexKey + "network"
 					network := upstreamMap[dstNetworkKey]
 					delete(upstreamMap, dstNetworkKey)
-					var dstClientConf bootstrap.IClientConf
+					var dstClientConf socket.IClientConf
 					if network == channel.NETWORK_WS.String() {
 						dstSchemeKey := indexKey + "scheme"
 						dstScheme := upstreamMap[dstSchemeKey]
@@ -203,12 +203,7 @@ func initUpstreamConfs(config map[string]string) []agent.IUpstreamConf {
 						dstSubprotocolKey := indexKey + "subprotocol"
 						dstSubrotocol := upstreamMap[dstSubprotocolKey]
 						delete(upstreamMap, dstSubprotocolKey)
-						dstClientConf = bootstrap.NewWsClientConf(dstIp, dstPort, dstScheme, dstPath, dstSubrotocol)
-					} else if network == channel.NETWORK_KWS00.String() {
-						dstPathKey := indexKey + ".path"
-						dstPath := upstreamMap[dstPathKey]
-						delete(upstreamMap, dstPathKey)
-						dstClientConf = bootstrap.NewKws00ClientConf(dstIp, dstPort, dstPath)
+						dstClientConf = socket.NewWsClientConf(dstIp, dstPort, dstScheme, dstPath, dstSubrotocol)
 					} else {
 						logx.Panic("dstclient network is nil, key:", dstNetworkKey)
 					}
@@ -216,7 +211,7 @@ func initUpstreamConfs(config map[string]string) []agent.IUpstreamConf {
 					logx.Info("dstClientConf:", dstClientConf)
 					if dstClientConf != nil {
 						if dstClientConfs == nil {
-							dstClientConfs = make([]bootstrap.IClientConf, 1)
+							dstClientConfs = make([]socket.IClientConf, 1)
 							dstClientConfs[0] = dstClientConf
 						} else {
 							dstClientConfs = append(dstClientConfs, dstClientConf)
@@ -251,7 +246,7 @@ var serverWsSchemeKey = "agent.server.scheme"
 var serverWsPathKey = "agent.server.path"
 var serverWsSubKey = "agent.server.subprotocol"
 
-func initServerConf(config map[string]string, agentId string) bootstrap.IServerConf {
+func initServerConf(config map[string]string, agentId string) socket.IServerConf {
 	serverIp := config[serverIpKey]
 	if len(serverIp) <= 0 {
 		// 本地ip
@@ -284,15 +279,16 @@ func initServerConf(config map[string]string, agentId string) bootstrap.IServerC
 		}
 	}
 
-	var serverConf bootstrap.IServerConf
-	if network == channel.NETWORK_KWS00.String() {
-		serverConf = bootstrap.NewKw00ServerConf(serverIp, port)
-		serverConf.SetMaxChannelSize(maxChannelSize)
-	} else if network == channel.NETWORK_WS.String() {
+	var serverConf socket.IServerConf
+	// if network == channel.NETWORK_KWS00.String() {
+	// 	serverConf = socket.NewKw00ServerConf(serverIp, port)
+	// 	serverConf.SetMaxChannelSize(maxChannelSize)
+	// } else
+	if network == channel.NETWORK_WS.String() {
 		scheme := config[serverWsSchemeKey]
 		path := config[serverWsPathKey]
 		subprotocol := config[serverWsSubKey]
-		serverConf = bootstrap.NewWsServerConf(serverIp, port, scheme, path, subprotocol)
+		serverConf = socket.NewWsServerConf(serverIp, port, scheme, path, subprotocol)
 		serverConf.SetMaxChannelSize(maxChannelSize)
 	}
 	return serverConf

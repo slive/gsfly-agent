@@ -5,9 +5,9 @@
 package agent
 
 import (
-	"github.com/Slive/gsfly/bootstrap"
 	"github.com/Slive/gsfly/common"
 	logx "github.com/Slive/gsfly/logger"
+	"github.com/Slive/gsfly/socket"
 	"sync"
 )
 
@@ -87,21 +87,16 @@ func (sc *ServiceConf) GetFilterConfs() map[string]IFilterConf {
 }
 
 type IAgServerConf interface {
-	common.IParent
+	socket.IServerConf
 
-	common.IId
-
-	GetServerConf() bootstrap.IServerConf
+	GetServerConf() socket.IServerConf
 
 	GetLocationConfs() map[string]ILocationConf
 }
 
 type AgServerConf struct {
-	common.Id
 
-	common.Parent
-
-	ServerConf bootstrap.IServerConf
+	socket.IServerConf
 
 	LocationConfs []ILocationConf
 
@@ -110,7 +105,7 @@ type AgServerConf struct {
 	locationOne sync.Once
 }
 
-func NewAgServerConf(id string, serverConf bootstrap.IServerConf, locationConfs ...ILocationConf) *AgServerConf {
+func NewAgServerConf(id string, serverConf socket.IServerConf, locationConfs ...ILocationConf) *AgServerConf {
 	if serverConf == nil {
 		errMsg := "ServerConf is nil"
 		logx.Error(errMsg)
@@ -126,9 +121,10 @@ func NewAgServerConf(id string, serverConf bootstrap.IServerConf, locationConfs 
 
 	logx.Info("start to NewAgServerConf, id:", id)
 	b := &AgServerConf{
-		ServerConf:    serverConf,
+		IServerConf:  serverConf,
 		LocationConfs: locationConfs,
 	}
+
 	b.SetId(id)
 	logx.Info("finish to NewAgServerConf, conf:", b)
 	return b
@@ -145,8 +141,8 @@ func (asc *AgServerConf) initLocationConfMap() {
 	}
 }
 
-func (asc *AgServerConf) GetServerConf() bootstrap.IServerConf {
-	return asc.ServerConf
+func (asc *AgServerConf) GetServerConf() socket.IServerConf {
+	return asc.IServerConf
 }
 
 func (asc *AgServerConf) GetLocationConfs() map[string]ILocationConf {
@@ -324,7 +320,7 @@ func (upc *UpstreamConf) SetUpstreamType(upstreamType UpstreamType) {
 
 type IProxyConf interface {
 	IUpstreamConf
-	GetDstClientConfs() []bootstrap.IClientConf
+	GetDstClientConfs() []socket.IClientConf
 
 	GetLoadBalanceType() LoadBalanceType
 }
@@ -335,19 +331,19 @@ type ProxyConf struct {
 	// 负载均衡规则
 	// LoadBalance ILoadBalance
 	// dst客户端配置列表
-	DstClientConfs []bootstrap.IClientConf `json:"dstClients"`
+	DstClientConfs []socket.IClientConf
 
 	// 负载均衡规则
-	LoadBalanceType LoadBalanceType `json:"loadBalanceType"`
+	LoadBalanceType LoadBalanceType
 }
 
-func NewProxyConf(id string, loadBalanceType LoadBalanceType, dstClientConfs ...bootstrap.IClientConf) *ProxyConf {
+func NewProxyConf(id string, loadBalanceType LoadBalanceType, dstClientConfs ...socket.IClientConf) *ProxyConf {
 	if dstClientConfs == nil {
 		errMsg := "dstClientConfs are nil"
 		logx.Error(errMsg)
 		panic(errMsg)
 	}
-	p := &ProxyConf{DstClientConfs: make([]bootstrap.IClientConf, len(dstClientConfs))}
+	p := &ProxyConf{DstClientConfs: make([]socket.IClientConf, len(dstClientConfs))}
 	for index, conf := range dstClientConfs {
 		p.DstClientConfs[index] = conf
 	}
@@ -356,7 +352,7 @@ func NewProxyConf(id string, loadBalanceType LoadBalanceType, dstClientConfs ...
 	return p
 }
 
-func (pc *ProxyConf) GetDstClientConfs() []bootstrap.IClientConf {
+func (pc *ProxyConf) GetDstClientConfs() []socket.IClientConf {
 	return pc.DstClientConfs
 }
 

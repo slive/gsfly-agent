@@ -18,13 +18,17 @@ type IUpstream interface {
 
 	GetConf() IUpstreamConf
 
-	GetDstChannelPool() *hashmap.Map
+	// 目标channel列表
+	GetDstChannelMap() *hashmap.Map
 
+	// channel对列表
 	GetChannelPeerMap() *hashmap.Map
 
+	// 获取channel对
 	GetChannelPeer(ctx *UpstreamContext) IChannelPeer
 
-	CreateChannelPeer(ctx *UpstreamContext)
+	// 初始化channel对
+	InitChannelPeer(ctx *UpstreamContext)
 
 	QueryDstChannel(ctx *UpstreamContext)
 
@@ -35,6 +39,9 @@ type IUpstream interface {
 	ReleaseByDstChannel(dstChannel channel.IChannel)
 
 	ReleaseAll()
+
+	SetTransfer(transfer IExtension)
+	GetTransfer() IExtension
 }
 
 type Upstream struct {
@@ -44,12 +51,14 @@ type Upstream struct {
 	Conf IUpstreamConf
 
 	// 记录目标端channel池，可以复用
-	DstChannelPool *hashmap.Map
+	DstChannelMap *hashmap.Map
 
 	ChannelPeerMap *hashmap.Map
+
+	transfer IExtension
 }
 
-func NewUpstream(parent interface{}, upstreamConf IUpstreamConf) *Upstream {
+func NewUpstream(parent interface{}, upstreamConf IUpstreamConf, transfer IExtension) *Upstream {
 	if upstreamConf == nil {
 		errMsg := "upstreamConf id is nil"
 		logx.Error(errMsg)
@@ -57,11 +66,16 @@ func NewUpstream(parent interface{}, upstreamConf IUpstreamConf) *Upstream {
 	}
 
 	u := &Upstream{
-		Conf: upstreamConf,
-		DstChannelPool: hashmap.New(),
+		Conf:           upstreamConf,
+		DstChannelMap:  hashmap.New(),
 		ChannelPeerMap: hashmap.New(),
 	}
 	u.SetParent(parent)
+	if transfer == nil {
+		u.transfer = NewExtension()
+	} else {
+		u.transfer = transfer
+	}
 	return u
 }
 
@@ -69,9 +83,9 @@ func (ups *Upstream) GetConf() IUpstreamConf {
 	return ups.Conf
 }
 
-// GetDstChannelPool 目标channel池, channelId作为主键
-func (ups *Upstream) GetDstChannelPool() *hashmap.Map {
-	return ups.DstChannelPool
+// GetDstChannelMap 目标channel池, channelId作为主键
+func (ups *Upstream) GetDstChannelMap() *hashmap.Map {
+	return ups.DstChannelMap
 }
 
 // GetChannelPeerMap 获取channel对（agent/dst channel）
@@ -84,12 +98,11 @@ func (ups *Upstream) GetChannelPeer(ctx *UpstreamContext) IChannelPeer {
 	panic("implement me")
 }
 
-func (proxy *Proxy) QueryDstChannel(ctx *UpstreamContext) {
-	InnerQueryDstChannel(proxy, ctx)
+func (ups *Upstream) SetTransfer(transfer IExtension) {
+	ups.transfer = transfer
 }
-
-func (proxy *Proxy) QueryAgentChannel(ctx *UpstreamContext) {
-	InnerQueryAgentChannel(proxy, ctx)
+func (ups *Upstream) GetTransfer() IExtension {
+	return ups.transfer
 }
 
 func InnerQueryDstChannel(b IUpstream, ctx *UpstreamContext) {
@@ -126,7 +139,7 @@ func (ups *Upstream) ReleaseAll() {
 	ups.ChannelPeerMap.Clear()
 
 	// 释放所有dstpoolchannel
-	dstChPool := ups.GetDstChannelPool()
+	dstChPool := ups.GetDstChannelMap()
 	dstVals := dstChPool.Values()
 	for _, val := range dstVals {
 		val.(channel.IChannel).Stop()
@@ -184,7 +197,7 @@ type ChannelPeer struct {
 func NewChannelPeer(agentChannel, dstChannel channel.IChannel) *ChannelPeer {
 	return &ChannelPeer{
 		agentChannel: agentChannel,
-		dstChannel:   agentChannel,
+		dstChannel:   dstChannel,
 	}
 }
 
