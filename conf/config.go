@@ -364,7 +364,7 @@ func initChannelConf(config map[string]string) *channel.ChannelConf {
 		}
 	}
 	readTimeout := config[key_prefix_agent+"."+key_ch_readTimeout]
-	if len(writeBufSize) > 0 {
+	if len(readTimeout) > 0 {
 		retInt, err := strconv.ParseInt(readTimeout, 10, 32)
 		if err == nil {
 			defChConf.ReadTimeout = time.Duration(retInt)
