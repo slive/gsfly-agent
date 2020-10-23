@@ -19,7 +19,7 @@ type IExtension interface {
 
 	GetLocationPattern(ctx gch.IChHandlerContext) (localPattern string, params []interface{})
 
-	InitUpstream(upsConf IUpstreamConf) IUpstream
+	InitUpstream(upsConf IUpstreamConf, extension IExtension) IUpstream
 }
 
 type Extension struct {
@@ -84,14 +84,14 @@ func (t *Extension) GetLocationPattern(ctx gch.IChHandlerContext) (localPattern 
 	return localPattern, params
 }
 
-func (t *Extension) InitUpstream(upsConf IUpstreamConf) IUpstream {
+func (t *Extension) InitUpstream(upsConf IUpstreamConf, extension IExtension) IUpstream {
 	// 不同的upstreamtype进行不同的处理
 	upsType := upsConf.GetUpstreamType()
 	var ups IUpstream
 	if upsType == UPSTREAM_PROXY {
 		proxyConf, ok := upsConf.(IProxyConf)
 		if ok {
-			ups = NewProxy(t.GetParent(), proxyConf, t)
+			ups = NewProxy(t.GetParent(), proxyConf, extension)
 		} else {
 			panic("upstream type is invalid")
 		}

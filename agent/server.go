@@ -19,7 +19,7 @@ type IMsgHandler interface {
 type IAgServer interface {
 	socket.IServerListener
 
-	AddMsgHandler(handler IMsgHandler)
+	AddMsgHandler(handler... IMsgHandler)
 
 	GetMsgHandlers() []IMsgHandler
 
@@ -83,8 +83,8 @@ func (server *AgServer) GetConf() socket.IServerConf {
 	return server.serverConf
 }
 
-func (server *AgServer) AddMsgHandler(handler IMsgHandler) {
-	server.msgHandlers = append(server.msgHandlers, handler)
+func (server *AgServer) AddMsgHandler(handler... IMsgHandler) {
+	server.msgHandlers = append(server.msgHandlers, handler...)
 }
 
 func (server *AgServer) GetMsgHandlers() []IMsgHandler {

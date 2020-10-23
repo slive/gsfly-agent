@@ -271,7 +271,7 @@ func initServerConf(config map[string]string, agentId string) socket.IServerConf
 	maxChannelSizeStr := config[serverMaxChSizeKey]
 	maxChannelSize := 0
 	if len(maxChannelSizeStr) > 0 {
-		retId, err := strconv.ParseInt(portStr, 10, 32)
+		retId, err := strconv.ParseInt(maxChannelSizeStr, 10, 32)
 		if err != nil {
 			logx.Panic("maxChannelSize is error.")
 		} else {
@@ -290,6 +290,14 @@ func initServerConf(config map[string]string, agentId string) socket.IServerConf
 		subprotocol := config[serverWsSubKey]
 		serverConf = socket.NewWsServerConf(serverIp, port, scheme, path, subprotocol)
 		serverConf.SetMaxChannelSize(maxChannelSize)
+	} else if network == channel.NETWORK_KCP.String() {
+		serverConf = socket.NewKcpServerConf(serverIp, port)
+		serverConf.SetMaxChannelSize(maxChannelSize)
+	} else if network == channel.NETWORK_TCP.String() {
+		serverConf = socket.NewTcpServerConf(serverIp, port)
+		serverConf.SetMaxChannelSize(maxChannelSize)
+	}else{
+		logx.Info("unsupport network:", network)
 	}
 	return serverConf
 }

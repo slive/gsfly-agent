@@ -65,7 +65,7 @@ func NewService(serviceConf IServiceConf, extension IExtension) *Service {
 	upsConfs := serviceConf.GetUpstreamConfs()
 	service.Upstreams = make(map[string]IUpstream, len(upsConfs))
 	for key, conf := range upsConfs {
-		ups := service.extension.InitUpstream(conf)
+		ups := service.extension.InitUpstream(conf, service.extension)
 		if ups != nil {
 			service.GetUpstreams()[key] = ups
 		} else {
