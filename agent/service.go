@@ -150,7 +150,7 @@ func (service *Service) Stop() {
 	// 清理upstream相关
 	upstreams := service.Upstreams
 	for _, upstream := range upstreams {
-		upstream.ReleaseAll()
+		upstream.ReleaseChannelPeers()
 		service.Upstreams = nil
 	}
 

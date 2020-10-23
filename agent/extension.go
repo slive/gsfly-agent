@@ -1,4 +1,8 @@
 /*
+ * 扩展实现，主要实现如：
+ *  1、初始化Upstream
+ *  2、agent(dstClient)转换转发功能
+ *  3、定位匹配功能
  * Author:slive
  * DATE:2020/10/14
  */
@@ -15,10 +19,13 @@ import (
 
 type IExtension interface {
 	common.IParent
-	Transfer(fromCtx gch.IChHandlerContext, toChannel gch.IChannel)
 
-	GetLocationPattern(ctx gch.IChHandlerContext) (localPattern string, params []interface{})
+	Transfer(fromCtx gch.IChHandleContext, toChannel gch.IChannel)
 
+	// GetLocationPattern 获取location匹配路径，通过localPattern查找到对应已初始化的IUpstream
+	GetLocationPattern(ctx gch.IChHandleContext) (localPattern string, params []interface{})
+
+	// InitUpstream 实现不同的Upstream
 	InitUpstream(upsConf IUpstreamConf, extension IExtension) IUpstream
 }
 
@@ -32,7 +39,7 @@ func NewExtension() *Extension {
 	return e
 }
 
-func (t *Extension) Transfer(fromCtx gch.IChHandlerContext, toChannel gch.IChannel) {
+func (t *Extension) Transfer(fromCtx gch.IChHandleContext, toChannel gch.IChannel) {
 	fromPacket := fromCtx.GetPacket()
 	fromChannel := fromPacket.GetChannel()
 	dstPacket := toChannel.NewPacket()
@@ -64,7 +71,7 @@ func (t *Extension) Transfer(fromCtx gch.IChHandlerContext, toChannel gch.IChann
 	toChannel.Write(dstPacket)
 }
 
-func (t *Extension) GetLocationPattern(ctx gch.IChHandlerContext) (localPattern string, params []interface{}) {
+func (t *Extension) GetLocationPattern(ctx gch.IChHandleContext) (localPattern string, params []interface{}) {
 	agentChannel := ctx.GetChannel()
 	protocol := agentChannel.GetConf().GetNetwork()
 	localPattern = ""

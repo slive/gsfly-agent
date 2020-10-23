@@ -12,21 +12,25 @@ import (
 	"github.com/emirpasic/gods/maps/hashmap"
 )
 
+// IMsgHandler 处理消息的接口
 type IMsgHandler interface {
-	Handle(ctx gch.IChHandlerContext)
+	Handle(ctx gch.IChHandleContext)
 }
 
 type IAgServer interface {
 	socket.IServerListener
 
+	// AddMsgHandler 添加处理消息handler，TODO 做排序？
 	AddMsgHandler(handler... IMsgHandler)
 
 	GetMsgHandlers() []IMsgHandler
 
 	ClearMsgHandlers()
 
-	LocationUpstream(ctx gch.IChHandlerContext)
+	// LocationUpstream 定位到location
+	LocationUpstream(ctx gch.IChHandleContext)
 
+	// GetExtension 扩展实现
 	GetExtension() IExtension
 }
 
@@ -52,9 +56,9 @@ func NewAgServer(parent interface{}, serverConf IAgServerConf, extension IExtens
 	s.msgHandlers = []IMsgHandler{}
 
 	// 初始化channel相关handler
-	handle := gch.NewDefChHandle(s.onAgentChannelHandler)
-	handle.SetOnActiveHandler(s.onAgentChannelActiveHandle)
-	handle.SetOnInActiveHandler(s.onAgentChannelInActiveHandle)
+	handle := gch.NewDefChHandle(s.onAgentChannelReadHandle)
+	handle.SetOnActive(s.onAgentChannelActiveHandle)
+	handle.SetOnInActive(s.onAgentChannelInActiveHandle)
 
 	// 扩展点
 	if extension == nil {
@@ -83,6 +87,7 @@ func (server *AgServer) GetConf() socket.IServerConf {
 	return server.serverConf
 }
 
+// AddMsgHandler 添加处理消息handler，按添加顺序先后次序执行
 func (server *AgServer) AddMsgHandler(handler... IMsgHandler) {
 	server.msgHandlers = append(server.msgHandlers, handler...)
 }
@@ -97,10 +102,9 @@ func (server *AgServer) ClearMsgHandlers() {
 
 const (
 	Upstream_Attach_key = "upstream"
-	path_key            = "path"
 )
 
-func (ags *AgServer) onAgentChannelActiveHandle(ctx gch.IChHandlerContext) {
+func (ags *AgServer) onAgentChannelActiveHandle(ctx gch.IChHandleContext) {
 	ags.LocationUpstream(ctx)
 	err := ctx.GetError()
 	if err != nil {
@@ -109,7 +113,7 @@ func (ags *AgServer) onAgentChannelActiveHandle(ctx gch.IChHandlerContext) {
 }
 
 // onAgentChannelInActiveHandle 当serverChannel关闭时，触发clientchannel关闭
-func (ags *AgServer) onAgentChannelInActiveHandle(ctx gch.IChHandlerContext) {
+func (ags *AgServer) onAgentChannelInActiveHandle(ctx gch.IChHandleContext) {
 	agentChannel := ctx.GetChannel()
 	agentChId := agentChannel.GetId()
 	defer func() {
@@ -121,12 +125,12 @@ func (ags *AgServer) onAgentChannelInActiveHandle(ctx gch.IChHandlerContext) {
 	if ups != nil {
 		proxy, ok := ups.(IProxy)
 		if ok {
-			proxy.ReleaseByAgentChannel(agentChannel)
+			proxy.ReleaseOnAgentChannel(agentChannel)
 		}
 	}
 }
 
-func (ags *AgServer) onAgentChannelHandler(handlerCtx gch.IChHandlerContext) {
+func (ags *AgServer) onAgentChannelReadHandle(handlerCtx gch.IChHandleContext) {
 	packet := handlerCtx.GetPacket()
 	// 先处理注册的msghandler
 	handlers := ags.msgHandlers
@@ -155,7 +159,7 @@ func (ags *AgServer) onAgentChannelHandler(handlerCtx gch.IChHandlerContext) {
 
 const default_localPattern = ""
 
-func (ags *AgServer) LocationUpstream(ctx gch.IChHandlerContext) {
+func (ags *AgServer) LocationUpstream(agentCtx gch.IChHandleContext) {
 	// TODO filter的处理
 	// FilterConfs := ags.GetServerConf().GetServerConf().GetFilterConfs()
 
@@ -168,13 +172,13 @@ func (ags *AgServer) LocationUpstream(ctx gch.IChHandlerContext) {
 			logx.Error("location upstream error:", ret)
 		}
 	}()
-	agentChannel := ctx.GetChannel()
-	localPattern, params := ags.GetExtension().GetLocationPattern(ctx)
+	agentChannel := agentCtx.GetChannel()
+	localPattern, params := ags.GetExtension().GetLocationPattern(agentCtx)
 	location := ags.locationHandle(ags, localPattern)
 	if location == nil {
 		s := "handle localtion error, Pattern:" + localPattern
 		logx.Error(s)
-		ctx.SetError(common.NewError2(gch.ERR_MSG, s))
+		agentCtx.SetError(common.NewError2(gch.ERR_MSG, s))
 		return
 	}
 
@@ -184,11 +188,10 @@ func (ags *AgServer) LocationUpstream(ctx gch.IChHandlerContext) {
 	upsStreams := ags.GetParent().(IService).GetUpstreams()
 	ups, found := upsStreams[upstreamId]
 	if found {
-		context := NewUpstreamContext(agentChannel, ctx.GetPacket(), true, params...)
-		ups.InitChannelPeer(context)
-		f := context.IsOk()
-		logx.Info("select ok:", f)
-		if f {
+		ups.InitChannelPeer(agentCtx, params)
+		ret := agentCtx.GetRet()
+		logx.Info("select ok:", ret)
+		if ret != nil {
 			// TODO 一个agent可能有多个upstream情况
 			agentChannel.AddAttach(Upstream_Attach_key, ups)
 			return
