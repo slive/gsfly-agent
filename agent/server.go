@@ -125,7 +125,7 @@ func (ags *AgServer) onAgentChannelInActiveHandle(ctx gch.IChHandleContext) {
 	if ups != nil {
 		proxy, ok := ups.(IProxy)
 		if ok {
-			proxy.ReleaseOnAgentChannel(agentChannel)
+			proxy.ReleaseOnAgentChannel(ctx)
 		}
 	}
 }
@@ -146,11 +146,10 @@ func (ags *AgServer) onAgentChannelReadHandle(handlerCtx gch.IChHandleContext) {
 	agentChannel := packet.GetChannel()
 	ups, found := agentChannel.GetAttach(Upstream_Attach_key).(IUpstream)
 	if found {
-		upCtx := NewUpstreamContext(agentChannel, packet, true)
-		ups.QueryDstChannel(upCtx)
-		dstCh, found := upCtx.GetRet(), upCtx.IsOk()
-		if found {
-			ags.GetExtension().Transfer(handlerCtx, dstCh)
+		ups.QueryDstChannel(handlerCtx)
+		dstCh := handlerCtx.GetRet()
+		if dstCh != nil {
+			ags.GetExtension().Transfer(handlerCtx, dstCh.(gch.IChannel))
 			return
 		}
 	}
@@ -199,7 +198,7 @@ func (ags *AgServer) LocationUpstream(agentCtx gch.IChHandleContext) {
 	}
 	errMs := "select DstChannel error."
 	logx.Error(errMs, ups)
-	ctx.SetError(common.NewError2(gch.ERR_MSG, errMs))
+	agentCtx.SetError(common.NewError2(gch.ERR_MSG, errMs))
 	return
 }
 
