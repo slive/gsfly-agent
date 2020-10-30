@@ -23,10 +23,12 @@ type IExtension interface {
 	Transfer(fromCtx gch.IChHandleContext, toChannel gch.IChannel)
 
 	// GetLocationPattern 获取location匹配路径，通过localPattern查找到对应已初始化的IUpstream
-	GetLocationPattern(ctx gch.IChHandleContext) (localPattern string, params []interface{})
+	GetLocationPattern(ctx gch.IChHandleContext) (localPattern string, params map[string]interface{})
 
 	// InitUpstream 实现不同的Upstream
 	InitUpstream(upsConf IUpstreamConf, extension IExtension) IUpstream
+
+	InitServerListener(server IAgServer) error
 }
 
 type Extension struct {
@@ -71,15 +73,15 @@ func (t *Extension) Transfer(fromCtx gch.IChHandleContext, toChannel gch.IChanne
 	toChannel.Write(dstPacket)
 }
 
-func (t *Extension) GetLocationPattern(ctx gch.IChHandleContext) (localPattern string, params []interface{}) {
+func (t *Extension) GetLocationPattern(ctx gch.IChHandleContext) (localPattern string, params map[string]interface{}) {
 	agentChannel := ctx.GetChannel()
 	protocol := agentChannel.GetConf().GetNetwork()
 	localPattern = ""
-	params = make([]interface{}, 1)
+	params = make(map[string] interface{})
 	switch protocol {
 	case gch.NETWORK_WS:
 		wsChannel := agentChannel.(*tcpx.WsChannel)
-		params[0] = wsChannel.GetParams()
+		params = wsChannel.GetParams()
 		// 1、约定用path来限定路径
 		wsServerConf := wsChannel.GetConf().(socket.IWsServerConf)
 		localPattern = wsServerConf.GetPath()
@@ -106,4 +108,10 @@ func (t *Extension) InitUpstream(upsConf IUpstreamConf, extension IExtension) IU
 		// TODO
 	}
 	return ups
+}
+
+func(t *Extension) InitServerListener(server IAgServer) error{
+	// 空实现
+	logx.Info("init serverlistener, nothing...")
+	return nil
 }

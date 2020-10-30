@@ -21,7 +21,7 @@ type IAgServer interface {
 	socket.IServerListener
 
 	// AddMsgHandler 添加处理消息handler，TODO 做排序？
-	AddMsgHandler(handler... IMsgHandler)
+	AddMsgHandler(handler ...IMsgHandler)
 
 	GetMsgHandlers() []IMsgHandler
 
@@ -72,9 +72,12 @@ func NewAgServer(parent interface{}, serverConf IAgServerConf, extension IExtens
 }
 
 func (server *AgServer) Listen() error {
-	err := server.ServerListener.Listen()
+	err := server.extension.InitServerListener(server)
 	if err == nil {
-		server.locationHandle = defaultLocationHandle
+		err = server.ServerListener.Listen()
+		if err == nil {
+			server.locationHandle = defaultLocationHandle
+		}
 	}
 	return err
 }
@@ -88,7 +91,7 @@ func (server *AgServer) GetConf() socket.IServerConf {
 }
 
 // AddMsgHandler 添加处理消息handler，按添加顺序先后次序执行
-func (server *AgServer) AddMsgHandler(handler... IMsgHandler) {
+func (server *AgServer) AddMsgHandler(handler ...IMsgHandler) {
 	server.msgHandlers = append(server.msgHandlers, handler...)
 }
 

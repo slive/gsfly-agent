@@ -60,8 +60,13 @@ func Run(extension agent.IExtension, cfPath string, agentMsgHandle ...agent.IMsg
 	serviceConf := conf.InitServiceConf(config)
 	service := agent.NewService(serviceConf, extension)
 	o := make(chan os.Signal, 1)
-	signal.Notify(o, os.Interrupt, os.Kill)
-	service.Start()
+	signal.Notify(o)
+	err := service.Start()
+	if err != nil {
+		logx.Error("run error:", err)
+		service.Stop()
+		return
+	}
 	service.GetAgServer().AddMsgHandler(agentMsgHandle...)
 	select {
 	case <-o:

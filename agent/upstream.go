@@ -28,7 +28,7 @@ type IUpstream interface {
 	GetChannelPeer(ctx channel.IChHandleContext, isAgent bool) IChannelPeer
 
 	// 初始化channel对
-	InitChannelPeer(ctx channel.IChHandleContext, params ...interface{})
+	InitChannelPeer(ctx channel.IChHandleContext, params map[string]interface{})
 
 	// QueryDstChannel 查询dstChannel
 	QueryDstChannel(ctx channel.IChHandleContext)
@@ -104,7 +104,7 @@ func (ups *Upstream) GetExtension() IExtension {
 }
 
 func InnerQueryDstChannel(b IUpstream, ctx channel.IChHandleContext) {
-	ret := b.GetChannelPeer(ctx, false)
+	ret := b.GetChannelPeer(ctx, true)
 	if ret != nil {
 		peer := ret.(IChannelPeer)
 		ctx.SetRet(peer.GetDstChannel())
@@ -114,7 +114,7 @@ func InnerQueryDstChannel(b IUpstream, ctx channel.IChHandleContext) {
 }
 
 func InnerQueryAgentChannel(b IUpstream, ctx channel.IChHandleContext) {
-	ret := b.GetChannelPeer(ctx, true)
+	ret := b.GetChannelPeer(ctx, false)
 	if ret != nil {
 		peer := ret.(IChannelPeer)
 		ctx.SetRet(peer.GetAgentChannel())

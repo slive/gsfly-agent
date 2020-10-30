@@ -23,18 +23,18 @@ type Proxy struct {
 	ProxyConf IProxyConf
 
 	// 记录agent代理端和dst端channelId映射关系
-	AgentMapperDstCh *hashmap.Map
+	agentMapperDstCh *hashmap.Map
 }
 
 func NewProxy(parent interface{}, proxyConf IProxyConf, transfer IExtension) *Proxy {
 	p := &Proxy{}
 	p.Upstream = *NewUpstream(parent, proxyConf, transfer)
 	p.ProxyConf = proxyConf
-	p.AgentMapperDstCh = hashmap.New()
+	p.agentMapperDstCh = hashmap.New()
 	return p
 }
 
-func (proxy *Proxy) InitChannelPeer(agentCtx channel.IChHandleContext, params ...interface{}) {
+func (proxy *Proxy) InitChannelPeer(agentCtx channel.IChHandleContext, params map[string]interface{}) {
 	lbsCtx := NewLoadBalanceContext(nil, proxy, agentCtx.GetChannel())
 	lbhandle := localBalanceHandles[proxy.ProxyConf.GetLoadBalanceType()]
 	// TODO 负载均衡策略
@@ -43,18 +43,14 @@ func (proxy *Proxy) InitChannelPeer(agentCtx channel.IChHandleContext, params ..
 
 	// 3、代理到目标
 	var dstCh channel.IChannel
-	var ps map[string]interface{}
-	if len(ps) > 0 {
-		ps = params[0].(map[string]interface{})
-	}
-	logx.Info("select params:", ps)
+	logx.Info("select params:", params)
 
 	// c初始化
 	handle := channel.NewDefChHandle(proxy.onDstChannelReadHandle)
 	handle.SetOnActive(proxy.onDstChannelActiveHandle)
 	handle.SetOnInActive(proxy.onDstChannelInActiveHandle)
-	clientStrap := socket.NewClientConn(proxy, dstClientConf, handle, ps)
-	err := clientStrap.Dial()
+	clientConn := socket.NewClientConn(proxy, dstClientConf, handle, params)
+	err := clientConn.Dial()
 	agentCh := agentCtx.GetChannel()
 	agentChId := agentCh.GetId()
 	if err != nil {
@@ -63,15 +59,17 @@ func (proxy *Proxy) InitChannelPeer(agentCtx channel.IChHandleContext, params ..
 	}
 
 	// 拨号成功，记录
-	dstCh = clientStrap.GetChannel()
+	dstCh = clientConn.GetChannel()
 	dstChId := dstCh.GetId()
-	proxy.AgentMapperDstCh.Put(agentChId, dstChId)
+	// agentChId和dstChId关系
+	proxy.agentMapperDstCh.Put(agentChId, dstChId)
 	// dstChId作为主键
 	proxy.GetChannelPeers().Put(dstChId, NewChannelPeer(agentCh, dstCh))
 
 	// 记录dstchannel到pool中
 	proxy.GetDstChannels().Put(dstChId, dstCh)
 	agentCtx.SetRet(dstCh)
+	logx.Info("fininsh initChannelPeer, agentChId:{}, dstChId:{}", agentChId, dstChId)
 }
 
 // GetChannelPeer 通过UpstreamContext获取到对应的channelpeer
@@ -81,7 +79,7 @@ func (proxy *Proxy) GetChannelPeer(ctx channel.IChHandleContext, isAgent bool) I
 	chId := channel.GetId()
 	if isAgent {
 		// 代理端，先获取dstChId
-		ret, found := proxy.AgentMapperDstCh.Get(chId)
+		ret, found := proxy.agentMapperDstCh.Get(chId)
 		if !found {
 			logx.Warn("get dstChId is nil, agentChId:", chId)
 			return nil
@@ -134,11 +132,11 @@ func (proxy *Proxy) onDstChannelInActiveHandle(ctx channel.IChHandleContext) {
 // 因为和dst端channel是一对一对应关系，所以需要释放dst端的channel记录和资源
 func (proxy *Proxy) ReleaseOnAgentChannel(agentCtx channel.IChHandleContext) {
 	agentChId := agentCtx.GetChannel().GetId()
-	dstCh, found := proxy.AgentMapperDstCh.Get(agentChId)
+	dstCh, found := proxy.agentMapperDstCh.Get(agentChId)
 	logx.Infof("dstCh found:%v, agentChId:%v", found, agentChId)
 	if found {
 		// 清除dstchannel相关记录
-		proxy.AgentMapperDstCh.Remove(agentChId)
+		proxy.agentMapperDstCh.Remove(agentChId)
 		chPeer, ok := dstCh.(IChannelPeer)
 		if ok {
 			dstChannel := chPeer.GetDstChannel()
