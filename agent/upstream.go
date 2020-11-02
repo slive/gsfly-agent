@@ -27,7 +27,7 @@ type IUpstream interface {
 	// 获取channel对
 	GetChannelPeer(ctx channel.IChHandleContext, isAgent bool) IChannelPeer
 
-	// 初始化channel对
+	// InitChannelPeer 初始化channel对(agentChannel, dstClientChannel)
 	InitChannelPeer(ctx channel.IChHandleContext, params map[string]interface{})
 
 	// QueryDstChannel 查询dstChannel
@@ -36,12 +36,16 @@ type IUpstream interface {
 	// QueryAgentChannel 查询agentChannel
 	QueryAgentChannel(ctx channel.IChHandleContext)
 
+	// ReleaseOnAgentChannel 当agentChannel关闭时，释放相关资源，一般是dstClientChannel
 	ReleaseOnAgentChannel(agentCtx channel.IChHandleContext)
 
+	// ReleaseOnDstChannel 当dstClientChannel关闭时，释放相关资源，一般是agentChannel
 	ReleaseOnDstChannel(dstCtx channel.IChHandleContext)
 
+	// ReleaseChannelPeers 释放所有channelpeer
 	ReleaseChannelPeers()
 
+	// GetExtension 获取扩展点
 	GetExtension() IExtension
 }
 
@@ -51,17 +55,23 @@ type Upstream struct {
 	// 配置
 	conf IUpstreamConf
 
-	// 记录目标端channel池，可以复用
+	// 记录目标端channel，可以复用
 	dstChannels *hashmap.Map
 
+	// 记录channelpeer
 	channelPeers *hashmap.Map
 
+	// 扩展点
 	extension IExtension
 }
 
+// NewUpstream 创建upstream对象
+// parent 任意父接口，非必选
+// upstreamConf upstream配置，必选
+// extension 扩展点，见IExtension
 func NewUpstream(parent interface{}, upstreamConf IUpstreamConf, extension IExtension) *Upstream {
 	if upstreamConf == nil {
-		errMsg := "upstreamConf id is nil"
+		errMsg := "upstreamConf id is nil."
 		logx.Error(errMsg)
 		panic(errMsg)
 	}
@@ -73,6 +83,7 @@ func NewUpstream(parent interface{}, upstreamConf IUpstreamConf, extension IExte
 	}
 	u.SetParent(parent)
 	if extension == nil {
+		// 使用默认扩展点
 		u.extension = NewExtension()
 	} else {
 		u.extension = extension

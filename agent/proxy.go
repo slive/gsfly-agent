@@ -45,7 +45,7 @@ func (proxy *Proxy) InitChannelPeer(agentCtx channel.IChHandleContext, params ma
 	var dstCh channel.IChannel
 	logx.Info("select params:", params)
 
-	// c初始化
+	// 初始化DstClientConn
 	handle := channel.NewDefChHandle(proxy.onDstChannelReadHandle)
 	handle.SetOnActive(proxy.onDstChannelActiveHandle)
 	handle.SetOnInActive(proxy.onDstChannelInActiveHandle)

@@ -34,7 +34,7 @@ func init() {
 	flag.StringVar(&cf, "cf", "", "config file path, as'/home/agent.properties'")
 }
 
-func RunDef(extension agent.IExtension, agentMsgHandle ...agent.IMsgHandler) {
+func RunDef(extension agent.IExtension) {
 	defer func() {
 		ret := recover()
 		if ret != nil {
@@ -51,10 +51,10 @@ func RunDef(extension agent.IExtension, agentMsgHandle ...agent.IMsgHandler) {
 			cf = util.GetPwd() + "/conf/agent.properties"
 		}
 	}
-	Run(extension, cf, agentMsgHandle...)
+	Run(extension, cf)
 }
 
-func Run(extension agent.IExtension, cfPath string, agentMsgHandle ...agent.IMsgHandler) {
+func Run(extension agent.IExtension, cfPath string) {
 	logx.Info("properties file:", cfPath)
 	config := util.LoadProperties(cfPath)
 	serviceConf := conf.InitServiceConf(config)
@@ -67,11 +67,16 @@ func Run(extension agent.IExtension, cfPath string, agentMsgHandle ...agent.IMsg
 		service.Stop()
 		return
 	}
-	service.GetAgServer().AddMsgHandler(agentMsgHandle...)
+	if extension != nil{
+		msgHandlers := extension.GetAgentMsgHandlers()
+		if msgHandlers != nil{
+			service.GetAgServer().AddMsgHandler(msgHandlers...)
+		}
+	}
 	select {
-	case <-o:
+	case s := <-o:
 		service.Stop()
-		logx.Info("stop....")
+		logx.Info("stop...., signal:", s)
 		break
 	}
 }

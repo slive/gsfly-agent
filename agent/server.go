@@ -72,7 +72,7 @@ func NewAgServer(parent interface{}, serverConf IAgServerConf, extension IExtens
 }
 
 func (server *AgServer) Listen() error {
-	err := server.extension.InitServerListener(server)
+	err := server.extension.OnServerListen(server)
 	if err == nil {
 		err = server.ServerListener.Listen()
 		if err == nil {
@@ -92,7 +92,9 @@ func (server *AgServer) GetConf() socket.IServerConf {
 
 // AddMsgHandler 添加处理消息handler，按添加顺序先后次序执行
 func (server *AgServer) AddMsgHandler(handler ...IMsgHandler) {
-	server.msgHandlers = append(server.msgHandlers, handler...)
+	if len(handler) > 0 {
+		server.msgHandlers = append(server.msgHandlers, handler...)
+	}
 }
 
 func (server *AgServer) GetMsgHandlers() []IMsgHandler {

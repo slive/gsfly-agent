@@ -17,18 +17,26 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// IExtension 代理扩展实现，所有代理可实现功能，基本都在这里实现
 type IExtension interface {
 	common.IParent
 
+	// Transfer 代理的转发消息操作，可能是agentChannel收到消息后转发到dstChannel，也可能是dstChannel收到消息后转发到agentChannel
+	// fromCtx 从哪里来的结束的消息
+	// toChannel 到目标channel发送
 	Transfer(fromCtx gch.IChHandleContext, toChannel gch.IChannel)
 
-	// GetLocationPattern 获取location匹配路径，通过localPattern查找到对应已初始化的IUpstream
+	// GetLocationPattern 获取location匹配路径和对应的参数，然后可通过localPattern查找到对应已初始化的IUpstream
 	GetLocationPattern(ctx gch.IChHandleContext) (localPattern string, params map[string]interface{})
 
-	// InitUpstream 实现不同的Upstream
-	InitUpstream(upsConf IUpstreamConf, extension IExtension) IUpstream
+	// CreateUpstream 实现不同的Upstream，如自定义的upstream
+	CreateUpstream(upsConf IUpstreamConf, extension IExtension) IUpstream
 
-	InitServerListener(server IAgServer) error
+	// OnServerListen 在ServerListen前操作，如果报错，则无法进行ServerListen操作
+	OnServerListen(server IAgServer) error
+
+	// GetAgentMsgHandlers 获取代理agentchannel的消息处理，按顺序提供
+	GetAgentMsgHandlers() []IMsgHandler
 }
 
 type Extension struct {
@@ -41,6 +49,9 @@ func NewExtension() *Extension {
 	return e
 }
 
+// Transfer 代理的转发消息操作，可能是agentChannel收到消息后转发到dstChannel，也可能是dstChannel收到消息后转发到agentChannel
+// fromCtx 从哪里来的结束的消息
+// toChannel 到目标channel发送
 func (t *Extension) Transfer(fromCtx gch.IChHandleContext, toChannel gch.IChannel) {
 	fromPacket := fromCtx.GetPacket()
 	fromChannel := fromPacket.GetChannel()
@@ -77,7 +88,7 @@ func (t *Extension) GetLocationPattern(ctx gch.IChHandleContext) (localPattern s
 	agentChannel := ctx.GetChannel()
 	protocol := agentChannel.GetConf().GetNetwork()
 	localPattern = ""
-	params = make(map[string] interface{})
+	params = make(map[string]interface{})
 	switch protocol {
 	case gch.NETWORK_WS:
 		wsChannel := agentChannel.(*tcpx.WsChannel)
@@ -93,7 +104,7 @@ func (t *Extension) GetLocationPattern(ctx gch.IChHandleContext) (localPattern s
 	return localPattern, params
 }
 
-func (t *Extension) InitUpstream(upsConf IUpstreamConf, extension IExtension) IUpstream {
+func (t *Extension) CreateUpstream(upsConf IUpstreamConf, extension IExtension) IUpstream {
 	// 不同的upstreamtype进行不同的处理
 	upsType := upsConf.GetUpstreamType()
 	var ups IUpstream
@@ -110,8 +121,13 @@ func (t *Extension) InitUpstream(upsConf IUpstreamConf, extension IExtension) IU
 	return ups
 }
 
-func(t *Extension) InitServerListener(server IAgServer) error{
+func (t *Extension) OnServerListen(server IAgServer) error {
 	// 空实现
 	logx.Info("init serverlistener, nothing...")
+	return nil
+}
+
+// 默认实现
+func (t *Extension) GetAgentMsgHandlers() []IMsgHandler {
 	return nil
 }

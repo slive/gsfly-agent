@@ -27,7 +27,7 @@ type IService interface {
 
 	IsClosed() bool
 
-	// InitUpstream(upsConf IUpstreamConf) IUpstream
+	// CreateUpstream(upsConf IUpstreamConf) IUpstream
 
 	// CreateFilter(filterConf IFilterConf) IFilter
 }
@@ -65,7 +65,7 @@ func NewService(serviceConf IServiceConf, extension IExtension) *Service {
 	upsConfs := serviceConf.GetUpstreamConfs()
 	service.Upstreams = make(map[string]IUpstream, len(upsConfs))
 	for key, conf := range upsConfs {
-		ups := service.extension.InitUpstream(conf, service.extension)
+		ups := service.extension.CreateUpstream(conf, service.extension)
 		if ups != nil {
 			service.GetUpstreams()[key] = ups
 		} else {
