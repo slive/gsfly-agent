@@ -41,18 +41,20 @@ type IExtension interface {
 
 type Extension struct {
 	common.Parent
+	msgHandles []IMsgHandler
 }
 
-func NewExtension() *Extension {
+func NewExtension(msgHandles ...IMsgHandler) *Extension {
 	e := &Extension{}
 	e.Parent = *common.NewParent(nil)
+	e.msgHandles = msgHandles
 	return e
 }
 
 // Transfer 代理的转发消息操作，可能是agentChannel收到消息后转发到dstChannel，也可能是dstChannel收到消息后转发到agentChannel
 // fromCtx 从哪里来的结束的消息
 // toChannel 到目标channel发送
-func (t *Extension) Transfer(fromCtx gch.IChHandleContext, toChannel gch.IChannel) {
+func (e *Extension) Transfer(fromCtx gch.IChHandleContext, toChannel gch.IChannel) {
 	fromPacket := fromCtx.GetPacket()
 	fromChannel := fromPacket.GetChannel()
 	dstPacket := toChannel.NewPacket()
@@ -84,7 +86,7 @@ func (t *Extension) Transfer(fromCtx gch.IChHandleContext, toChannel gch.IChanne
 	toChannel.Write(dstPacket)
 }
 
-func (t *Extension) GetLocationPattern(ctx gch.IChHandleContext) (localPattern string, params map[string]interface{}) {
+func (e *Extension) GetLocationPattern(ctx gch.IChHandleContext) (localPattern string, params map[string]interface{}) {
 	agentChannel := ctx.GetChannel()
 	protocol := agentChannel.GetConf().GetNetwork()
 	localPattern = ""
@@ -104,14 +106,14 @@ func (t *Extension) GetLocationPattern(ctx gch.IChHandleContext) (localPattern s
 	return localPattern, params
 }
 
-func (t *Extension) CreateUpstream(upsConf IUpstreamConf, extension IExtension) IUpstream {
+func (e *Extension) CreateUpstream(upsConf IUpstreamConf, extension IExtension) IUpstream {
 	// 不同的upstreamtype进行不同的处理
 	upsType := upsConf.GetUpstreamType()
 	var ups IUpstream
 	if upsType == UPSTREAM_PROXY {
 		proxyConf, ok := upsConf.(IProxyConf)
 		if ok {
-			ups = NewProxy(t.GetParent(), proxyConf, extension)
+			ups = NewProxy(e.GetParent(), proxyConf, extension)
 		} else {
 			panic("upstream type is invalid")
 		}
@@ -121,13 +123,13 @@ func (t *Extension) CreateUpstream(upsConf IUpstreamConf, extension IExtension) 
 	return ups
 }
 
-func (t *Extension) OnServerListen(server IAgServer) error {
+func (e *Extension) OnServerListen(server IAgServer) error {
 	// 空实现
 	logx.Info("init serverlistener, nothing...")
 	return nil
 }
 
 // 默认实现
-func (t *Extension) GetAgentMsgHandlers() []IMsgHandler {
-	return nil
+func (e *Extension) GetAgentMsgHandlers() []IMsgHandler {
+	return e.msgHandles
 }

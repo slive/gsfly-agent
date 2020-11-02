@@ -212,24 +212,3 @@ func (output *Output) IsOk() bool {
 func (output *Output) SetOk(ok bool) {
 	output.ok = ok
 }
-
-type IProcessContext interface {
-	IInput
-	IOutput
-}
-
-type ProcessContext struct {
-	Input
-	Output
-}
-
-func NewProcessContext(channel channel.IChannel, packet channel.IPacket, agent bool, params ...interface{}) *ProcessContext {
-	u := &ProcessContext{}
-	u.Input = Input{
-		Channel: channel,
-		Packet:  packet,
-		Agent:   agent,
-		Params:  params,
-	}
-	return u
-}
