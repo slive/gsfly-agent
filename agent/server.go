@@ -9,7 +9,6 @@ import (
 	"github.com/Slive/gsfly/common"
 	logx "github.com/Slive/gsfly/logger"
 	"github.com/Slive/gsfly/socket"
-	"github.com/emirpasic/gods/maps/hashmap"
 )
 
 // IMsgHandler 处理消息的接口
@@ -52,7 +51,6 @@ type AgServer struct {
 func NewAgServer(parent interface{}, serverConf IAgServerConf, extension IExtension) *AgServer {
 	s := &AgServer{serverConf: serverConf}
 	s.Closed = false
-	s.ChannelPool = hashmap.New()
 	s.msgHandlers = []IMsgHandler{}
 
 	// 初始化channel相关handler
@@ -92,9 +90,7 @@ func (server *AgServer) GetConf() socket.IServerConf {
 
 // AddMsgHandler 添加处理消息handler，按添加顺序先后次序执行
 func (server *AgServer) AddMsgHandler(handler ...IMsgHandler) {
-	if len(handler) > 0 {
-		server.msgHandlers = append(server.msgHandlers, handler...)
-	}
+	server.msgHandlers = append(server.msgHandlers, handler...)
 }
 
 func (server *AgServer) GetMsgHandlers() []IMsgHandler {

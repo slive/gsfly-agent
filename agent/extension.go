@@ -13,7 +13,6 @@ import (
 	"github.com/Slive/gsfly/channel/tcpx"
 	"github.com/Slive/gsfly/common"
 	logx "github.com/Slive/gsfly/logger"
-	"github.com/Slive/gsfly/socket"
 	"github.com/gorilla/websocket"
 )
 
@@ -95,9 +94,8 @@ func (e *Extension) GetLocationPattern(ctx gch.IChHandleContext) (localPattern s
 	case gch.NETWORK_WS:
 		wsChannel := agentChannel.(*tcpx.WsChannel)
 		params = wsChannel.GetParams()
-		// 1、约定用path来限定路径
-		wsServerConf := wsChannel.GetConf().(socket.IWsServerConf)
-		localPattern = wsServerConf.GetPath()
+		// 1、约定用path来限定路径，全匹配
+		localPattern = wsChannel.GetRelativePath()
 	default:
 		// TODO 待完善
 		localPattern = default_localPattern

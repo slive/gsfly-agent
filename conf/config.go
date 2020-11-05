@@ -243,6 +243,7 @@ var serverPortKey = "agent.server.port"
 var serverNetworkKey = "agent.server.network"
 var serverMaxChSizeKey = "agent.server.maxChannelSize"
 var serverWsSchemeKey = "agent.server.scheme"
+var serverWsKey = "agent.server.ws"
 var serverWsPathKey = "agent.server.path"
 var serverWsSubKey = "agent.server.subprotocol"
 
@@ -286,9 +287,25 @@ func initServerConf(config map[string]string, agentId string) socket.IServerConf
 	// } else
 	if network == channel.NETWORK_WS.String() {
 		scheme := config[serverWsSchemeKey]
-		path := config[serverWsPathKey]
-		subprotocol := config[serverWsSubKey]
-		serverConf = socket.NewWsServerConf(serverIp, port, scheme, path, subprotocol)
+		index := 0
+		wsConfs := make([]socket.IListenConf, 0)
+		for {
+			pathKey := fmt.Sprintf(serverWsKey+".%v.path", index)
+			subproKey := fmt.Sprintf(serverWsKey+".%v.subprotocol", index)
+			path := config[pathKey]
+			if len(path) <= 0 {
+				break
+			}
+			subpro := config[subproKey]
+			logx.Infof("%v:%v", pathKey, path)
+			logx.Infof("%v:%v", subproKey, subpro)
+			wsConf := socket.NewListenConf(channel.NETWORK_WS, path)
+			wsConf.AddAttach(socket.WS_SUBPROTOCOL_KEY, subpro)
+			wsConfs = append(wsConfs, wsConf)
+			index++
+		}
+		logx.Info("wsconfs:", wsConfs)
+		serverConf = socket.NewWsServerConf(serverIp, port, scheme, wsConfs...)
 		serverConf.SetMaxChannelSize(maxChannelSize)
 	} else if network == channel.NETWORK_KCP.String() {
 		serverConf = socket.NewKcpServerConf(serverIp, port)
@@ -296,7 +313,7 @@ func initServerConf(config map[string]string, agentId string) socket.IServerConf
 	} else if network == channel.NETWORK_TCP.String() {
 		serverConf = socket.NewTcpServerConf(serverIp, port)
 		serverConf.SetMaxChannelSize(maxChannelSize)
-	}else{
+	} else {
 		logx.Info("unsupport network:", network)
 	}
 	return serverConf
