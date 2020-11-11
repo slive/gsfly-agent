@@ -238,6 +238,7 @@ func initUpstreamConfs(config map[string]string) []agent.IUpstreamConf {
 	return upstreamConfs
 }
 
+var serverKey = "agent.server"
 var serverIpKey = "agent.server.ip"
 var serverPortKey = "agent.server.port"
 var serverNetworkKey = "agent.server.network"
@@ -281,30 +282,8 @@ func initServerConf(config map[string]string, agentId string) socket.IServerConf
 	}
 
 	var serverConf socket.IServerConf
-	// if network == channel.NETWORK_KWS00.String() {
-	// 	serverConf = socket.NewKw00ServerConf(serverIp, port)
-	// 	serverConf.SetMaxChannelSize(maxChannelSize)
-	// } else
 	if network == channel.NETWORK_WS.String() {
-		scheme := config[serverWsSchemeKey]
-		index := 0
-		wsConfs := make([]socket.IListenConf, 0)
-		for {
-			pathKey := fmt.Sprintf(serverWsKey+".%v.path", index)
-			subproKey := fmt.Sprintf(serverWsKey+".%v.subprotocol", index)
-			path := config[pathKey]
-			if len(path) <= 0 {
-				break
-			}
-			subpro := config[subproKey]
-			logx.Infof("%v:%v", pathKey, path)
-			logx.Infof("%v:%v", subproKey, subpro)
-			wsConf := socket.NewListenConf(channel.NETWORK_WS, path)
-			wsConf.AddAttach(socket.WS_SUBPROTOCOL_KEY, subpro)
-			wsConfs = append(wsConfs, wsConf)
-			index++
-		}
-		logx.Info("wsconfs:", wsConfs)
+		scheme, wsConfs := initServerWsConf(config)
 		serverConf = socket.NewWsServerConf(serverIp, port, scheme, wsConfs...)
 		serverConf.SetMaxChannelSize(maxChannelSize)
 	} else if network == channel.NETWORK_KCP.String() {
@@ -317,6 +296,41 @@ func initServerConf(config map[string]string, agentId string) socket.IServerConf
 		logx.Info("unsupport network:", network)
 	}
 	return serverConf
+}
+
+func initServerWsConf(config map[string]string) (string, []socket.IListenConf) {
+	scheme := config[serverWsSchemeKey]
+	index := 0
+	wsConfs := make([]socket.IListenConf, 0)
+	for {
+		pathKey := fmt.Sprintf(serverWsKey+".%v.path", index)
+		subproKey := fmt.Sprintf(serverWsKey+".%v.subprotocol", index)
+		path := config[pathKey]
+		if len(path) <= 0 {
+			break
+		}
+		subpro := config[subproKey]
+		logx.Infof("%v:%v", pathKey, path)
+		logx.Infof("%v:%v", subproKey, subpro)
+		wsConf := socket.NewListenConf(channel.NETWORK_WS, path)
+		wsConf.AddAttach(socket.WS_SUBPROTOCOL_KEY, subpro)
+		wsConfs = append(wsConfs, wsConf)
+		index++
+	}
+	logx.Info("wsconfs:", wsConfs)
+	// 如果为空则取默认
+	if len(wsConfs) <= 0 {
+		pathKey := serverKey + ".path"
+		subproKey := serverKey + ".subprotocol"
+		path := config[pathKey]
+		subpro := config[subproKey]
+		logx.Infof("%v:%v", pathKey, path)
+		logx.Infof("%v:%v", subproKey, subpro)
+		wsConf := socket.NewListenConf(channel.NETWORK_WS, path)
+		wsConf.AddAttach(socket.WS_SUBPROTOCOL_KEY, subpro)
+		wsConfs = append(wsConfs, wsConf)
+	}
+	return scheme, wsConfs
 }
 
 var serverLocationKey = "agent.server.location"
