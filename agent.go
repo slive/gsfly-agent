@@ -7,7 +7,7 @@ package agent
 import (
 	"flag"
 	"github.com/Slive/gsfly-agent/agent"
-	"github.com/Slive/gsfly-agent/conf"
+	config "github.com/Slive/gsfly-agent/config"
 	logx "github.com/Slive/gsfly/logger"
 	"github.com/Slive/gsfly/util"
 	"os"
@@ -56,23 +56,27 @@ func RunDef(extension agent.IExtension) {
 
 func Run(extension agent.IExtension, cfPath string) {
 	logx.Info("properties file:", cfPath)
-	config := util.LoadProperties(cfPath)
-	serviceConf := conf.InitServiceConf(config)
+	properties := util.LoadProperties(cfPath)
+	serviceConf := config.InitServiceConf(properties)
 	service := agent.NewService(serviceConf, extension)
-	o := make(chan os.Signal, 1)
-	signal.Notify(o)
+	extension.SetExtConf(properties)
+
+	// 启动
 	err := service.Start()
 	if err != nil {
 		logx.Error("run error:", err)
 		service.Stop()
 		return
 	}
-	if extension != nil{
+	if extension != nil {
 		msgHandlers := extension.GetAgentMsgHandlers()
-		if msgHandlers != nil{
+		if msgHandlers != nil {
 			service.GetAgServer().AddMsgHandler(msgHandlers...)
 		}
 	}
+
+	o := make(chan os.Signal, 1)
+	signal.Notify(o)
 	select {
 	case s := <-o:
 		service.Stop()

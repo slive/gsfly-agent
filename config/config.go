@@ -2,7 +2,7 @@
  * Author:slive
  * DATE:2020/9/10
  */
-package conf
+package config
 
 import (
 	"fmt"

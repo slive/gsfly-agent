@@ -16,7 +16,7 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// IExtension 代理扩展实现，所有代理可实现功能，基本都在这里实现
+// IExtension 代理扩展，实现相关联接口
 type IExtension interface {
 	common.IParent
 
@@ -36,13 +36,27 @@ type IExtension interface {
 
 	// GetAgentMsgHandlers 获取代理agentchannel的消息处理，按顺序提供
 	GetAgentMsgHandlers() []IMsgHandler
+
+	// GetExtConf 获取扩展参数
+	GetExtConf() map[string]string
+
+	// SetExtConf 设置扩展参数
+	SetExtConf(extConf map[string]string)
 }
 
+// Extension 代理扩展实现，所有代理可实现功能，基本都在这里实现
 type Extension struct {
 	common.Parent
+
+	// 消息处理
 	msgHandles []IMsgHandler
+
+	// 扩展的配置
+	extConf map[string]string
 }
 
+// NewExtension 创建代理扩展实现
+// msgHandles 消息处理，按顺序处理
 func NewExtension(msgHandles ...IMsgHandler) *Extension {
 	e := &Extension{}
 	e.Parent = *common.NewParent(nil)
@@ -104,6 +118,7 @@ func (e *Extension) GetLocationPattern(ctx gch.IChHandleContext) (localPattern s
 	return localPattern, params
 }
 
+// CreateUpstream 实现不同的Upstream，如自定义的upstream
 func (e *Extension) CreateUpstream(upsConf IUpstreamConf, extension IExtension) IUpstream {
 	// 不同的upstreamtype进行不同的处理
 	upsType := upsConf.GetUpstreamType()
@@ -121,13 +136,24 @@ func (e *Extension) CreateUpstream(upsConf IUpstreamConf, extension IExtension) 
 	return ups
 }
 
+// OnServerListen 在ServerListen前操作，如果报错，则无法进行ServerListen操作
 func (e *Extension) OnServerListen(server IAgServer) error {
 	// 空实现
 	logx.Info("init serverlistener, nothing...")
 	return nil
 }
 
-// 默认实现
+// GetAgentMsgHandlers 获取agent msg的操作，默认实现
 func (e *Extension) GetAgentMsgHandlers() []IMsgHandler {
 	return e.msgHandles
+}
+
+// GetExtConf 获取扩展参数
+func (e *Extension) GetExtConf() map[string]string {
+	return e.extConf
+}
+
+// SetExtConf 设置扩展参数
+func (e *Extension) SetExtConf(extConf map[string]string) {
+	e.extConf = extConf
 }

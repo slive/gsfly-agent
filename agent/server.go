@@ -26,9 +26,6 @@ type IAgServer interface {
 
 	ClearMsgHandlers()
 
-	// LocationUpstream 定位到location
-	LocationUpstream(ctx gch.IChHandleContext)
-
 	// GetExtension 扩展实现
 	GetExtension() IExtension
 }
@@ -106,7 +103,7 @@ const (
 )
 
 func (ags *AgServer) onAgentChannelActiveHandle(ctx gch.IChHandleContext) {
-	ags.LocationUpstream(ctx)
+	ags.locationUpstream(ctx)
 	err := ctx.GetError()
 	if err != nil {
 		gch.NotifyErrorHandle(ctx, err, gch.ERR_ACTIVE)
@@ -159,7 +156,8 @@ func (ags *AgServer) onAgentChannelReadHandle(handlerCtx gch.IChHandleContext) {
 
 const default_localPattern = ""
 
-func (ags *AgServer) LocationUpstream(agentCtx gch.IChHandleContext) {
+// locationUpstream 定位到location
+func (ags *AgServer) locationUpstream(agentCtx gch.IChHandleContext) {
 	// TODO filter的处理
 	// FilterConfs := ags.GetServerConf().GetServerConf().GetFilterConfs()
 
@@ -172,6 +170,8 @@ func (ags *AgServer) LocationUpstream(agentCtx gch.IChHandleContext) {
 			logx.Error("location upstream error:", ret)
 		}
 	}()
+
+	// 通过GetLocationPattern获取到对应的urlpattern，从而获取到upsetream
 	agentChannel := agentCtx.GetChannel()
 	localPattern, params := ags.GetExtension().GetLocationPattern(agentCtx)
 	location := ags.locationHandle(ags, localPattern)
@@ -188,6 +188,7 @@ func (ags *AgServer) LocationUpstream(agentCtx gch.IChHandleContext) {
 	upsStreams := ags.GetParent().(IService).GetUpstreams()
 	ups, found := upsStreams[upstreamId]
 	if found {
+		// 第一次获取到upstream，要构建channelPeer，然后对agentChannel和dstChannel进行关联
 		ups.InitChannelPeer(agentCtx, params)
 		ret := agentCtx.GetRet()
 		logx.Info("select ok:", ret)
@@ -197,6 +198,7 @@ func (ags *AgServer) LocationUpstream(agentCtx gch.IChHandleContext) {
 			return
 		}
 	}
+
 	errMs := "select DstChannel error."
 	logx.Error(errMs, ups)
 	agentCtx.SetError(common.NewError2(gch.ERR_MSG, errMs))
