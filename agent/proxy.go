@@ -144,6 +144,7 @@ func (proxy *Proxy) ReleaseOnAgentChannel(agentCtx channel.IChHandleContext) {
 			proxy.GetDstChannels().Remove(dstChId)
 			// 释放dstchannel资源
 			dstChannel.Stop()
+			dstChannel.GetParent()
 		}
 	}
 }

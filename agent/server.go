@@ -62,7 +62,8 @@ func NewAgServer(parent interface{}, serverConf IAgServerConf, extension IExtens
 		s.extension = extension
 	}
 
-	s.ServerListener = *socket.NewServerListener(parent, serverConf.GetServerConf(), handle)
+	sConf := serverConf.GetServerConf()
+	s.ServerListener = *socket.NewServerListener(parent, sConf, handle)
 	return s
 }
 

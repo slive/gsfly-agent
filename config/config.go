@@ -22,7 +22,7 @@ var logFileKey = "agent.log.file"
 var logLevelKey = "agent.log.level"
 var serverIdKey = "agent.server.id"
 
-func InitServiceConf(config map[string]string) agent.IServiceConf {
+func InitServiceConf(config map[string]string) []agent.IServiceConf {
 	logDir := config[logDirKey]
 	delete(config, logDirKey)
 
@@ -49,19 +49,22 @@ func InitServiceConf(config map[string]string) agent.IServiceConf {
 
 	locations := initLocations(config)
 
-	serverConf := initServerConf(config, agentId)
-
-	if serverConf == nil {
+	serverConfs := initServerConf(config, agentId)
+	if len(serverConfs) <= 0 {
 		logx.Panic("serverconf init is nil.")
 	}
-	logx.Info("serverConf:", serverConf)
+	logx.Info("serverItemConf:", serverConfs)
 
 	upstreamConfs := initUpstreamConfs(config)
 	logx.Info("upstreamConfs:", upstreamConfs)
 
-	agServerConf := agent.NewAgServerConf(agentId, serverConf, locations...)
-	serviceConf := agent.NewServiceConf(agentId, agServerConf, upstreamConfs...)
-	return serviceConf
+	serviceConfs := make([]agent.IServiceConf, len(serverConfs))
+	for index, sconf := range serverConfs {
+		agServerConf := agent.NewAgServerConf(agentId, sconf, locations...)
+		serviceConf := agent.NewServiceConf(agentId, agServerConf, upstreamConfs...)
+		serviceConfs[index] = serviceConf
+	}
+	return serviceConfs
 }
 
 func initLogConf(logFile string, logDir string, logLevel string) {
@@ -248,54 +251,128 @@ var serverWsKey = "agent.server.ws"
 var serverWsPathKey = "agent.server.path"
 var serverWsSubKey = "agent.server.subprotocol"
 
-func initServerConf(config map[string]string, agentId string) socket.IServerConf {
+func initServerConf(config map[string]string, agentId string) []socket.IServerConf {
+
+	itemConfs := make([]serverItemConf, 0)
+	network := config[serverNetworkKey]
+	if len(network) <= 0 {
+		network = channel.NETWORK_WS.String()
+	}
 	serverIp := config[serverIpKey]
 	if len(serverIp) <= 0 {
 		// 本地ip
 		serverIp = ""
 	}
+	maxChannelSizeStr := config[serverMaxChSizeKey]
+
+	var index = 0
+	for {
+		sPortKey := fmt.Sprintf("%v.%v.port", serverKey, index)
+		sPortstr := config[sPortKey]
+		if len(sPortstr) <= 0 {
+			break
+		}
+
+		sIpKey := fmt.Sprintf("%v.%v.ip", serverKey, index)
+		sIp := config[sIpKey]
+		if len(sIp) <= 0 {
+			// 为空则取父ip
+			sIp = serverIp
+		}
+		sNetworkKey := fmt.Sprintf("%v.%v.network", serverKey, index)
+		sNetworkstr := config[sNetworkKey]
+		if len(sNetworkKey) <= 0 {
+			// 为空则取父network
+			sNetworkKey = network
+		}
+
+		sNetMaxChannelSizeKey := fmt.Sprintf("%v.%v.maxChannelSize", serverKey, index)
+		sNetMaxChannelSizeStr := config[sNetMaxChannelSizeKey]
+		if len(sNetMaxChannelSizeStr) <= 0 {
+			// 为空则取父network
+			sNetMaxChannelSizeStr = maxChannelSizeStr
+		}
+		itemConfs = newServerItemConf(sPortstr, sIp, sNetworkstr, sNetMaxChannelSizeStr, itemConfs)
+		index++
+	}
 
 	portStr := config[serverPortKey]
-	port := 9080
+	if len(portStr) <= 0 {
+		if len(itemConfs) <= 0 {
+			portStr = "9080"
+		}
+	}
 	if len(portStr) > 0 {
+		itemConfs = newServerItemConf(portStr, serverIp, network, maxChannelSizeStr, itemConfs)
+	}
+
+	sconfs := make([]socket.IServerConf, 0)
+	var scheme string
+	var wsConfs []socket.IListenConf
+	for index, sc := range itemConfs {
+		// 共用部分
+		serverIp := sc.GetIp()
+		port := sc.GetPort()
+		network := sc.network
+		maxChannelSize := sc.maxChannelSize
+		var serverConf socket.IServerConf
+		if network == channel.NETWORK_WS.String() {
+			if len(wsConfs) <= 0 {
+				scheme, wsConfs = initServerWsConf(config)
+			}
+			serverConf = socket.NewWsServerConf(serverIp, port, scheme, wsConfs...)
+			serverConf.SetMaxChannelSize(maxChannelSize)
+		} else if network == channel.NETWORK_KCP.String() {
+			serverConf = socket.NewKcpServerConf(serverIp, port)
+			serverConf.SetMaxChannelSize(maxChannelSize)
+		} else if network == channel.NETWORK_TCP.String() {
+			serverConf = socket.NewTcpServerConf(serverIp, port)
+			serverConf.SetMaxChannelSize(maxChannelSize)
+		} else {
+			logx.Info("unsupport network:", network)
+		}
+		if serverConf != nil {
+			serverConf.SetId(fmt.Sprintf("%v.%v", agentId, index))
+			sconfs = append(sconfs, serverConf)
+		}
+
+	}
+
+	return sconfs
+}
+
+func newServerItemConf(portStr string, serverIp string, network string, maxChannelSizeStr string, serverItemConfs []serverItemConf) []serverItemConf {
+	if len(portStr) > 0 {
+		var port int
 		retId, err := strconv.ParseInt(portStr, 10, 32)
 		if err != nil {
 			logx.Panic("port is error.")
 		} else {
 			port = int(retId)
 		}
-	}
-	network := config[serverNetworkKey]
-	if len(network) <= 0 {
-		network = channel.NETWORK_WS.String()
-	}
-
-	maxChannelSizeStr := config[serverMaxChSizeKey]
-	maxChannelSize := 0
-	if len(maxChannelSizeStr) > 0 {
-		retId, err := strconv.ParseInt(maxChannelSizeStr, 10, 32)
-		if err != nil {
-			logx.Panic("maxChannelSize is error.")
-		} else {
-			maxChannelSize = int(retId)
+		maxChannelSize := 0
+		if len(maxChannelSizeStr) > 0 {
+			retId, err := strconv.ParseInt(maxChannelSizeStr, 10, 32)
+			if err != nil {
+				logx.Panic("maxChannelSize is error.")
+			} else {
+				maxChannelSize = int(retId)
+			}
 		}
+		sc := serverItemConf{
+			AddrConf:       *channel.NewAddrConf(serverIp, port),
+			network:        network,
+			maxChannelSize: maxChannelSize,
+		}
+		return append(serverItemConfs, sc)
 	}
+	return serverItemConfs
+}
 
-	var serverConf socket.IServerConf
-	if network == channel.NETWORK_WS.String() {
-		scheme, wsConfs := initServerWsConf(config)
-		serverConf = socket.NewWsServerConf(serverIp, port, scheme, wsConfs...)
-		serverConf.SetMaxChannelSize(maxChannelSize)
-	} else if network == channel.NETWORK_KCP.String() {
-		serverConf = socket.NewKcpServerConf(serverIp, port)
-		serverConf.SetMaxChannelSize(maxChannelSize)
-	} else if network == channel.NETWORK_TCP.String() {
-		serverConf = socket.NewTcpServerConf(serverIp, port)
-		serverConf.SetMaxChannelSize(maxChannelSize)
-	} else {
-		logx.Info("unsupport network:", network)
-	}
-	return serverConf
+type serverItemConf struct {
+	channel.AddrConf
+	network        string
+	maxChannelSize int
 }
 
 func initServerWsConf(config map[string]string) (string, []socket.IListenConf) {
