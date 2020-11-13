@@ -31,8 +31,11 @@ type IExtension interface {
 	// CreateUpstream 实现不同的Upstream，如自定义的upstream
 	CreateUpstream(upsConf IUpstreamConf, extension IExtension) IUpstream
 
-	// OnServerListen 在ServerListen前操作，如果报错，则无法进行ServerListen操作
-	OnServerListen(server IAgServer) error
+	// BeforeServerListen 在ServerListen前操作，如果报错，则无法进行ServerListen操作
+	BeforeServerListen(server IAgServer) error
+
+	// AfterServerListen 在ServerListen后的操作
+	AfterServerListen(server IAgServer)
 
 	// GetAgentMsgHandlers 获取代理agentchannel的消息处理，按顺序提供
 	GetAgentMsgHandlers() []IMsgHandler
@@ -136,11 +139,17 @@ func (e *Extension) CreateUpstream(upsConf IUpstreamConf, extension IExtension) 
 	return ups
 }
 
-// OnServerListen 在ServerListen前操作，如果报错，则无法进行ServerListen操作
-func (e *Extension) OnServerListen(server IAgServer) error {
+// BeforeServerListen 在ServerListen前操作，如果报错，则无法进行ServerListen操作
+func (e *Extension) BeforeServerListen(server IAgServer) error {
 	// 空实现
-	logx.Info("init serverlistener, nothing...")
+	logx.Info("before serverlistener, nothing...")
 	return nil
+}
+
+// AfterServerListen 在ServerListen前操作
+func (e *Extension) AfterServerListen(server IAgServer) {
+	// 空实现
+	logx.Info("after serverlistener, nothing...")
 }
 
 // GetAgentMsgHandlers 获取agent msg的操作，默认实现

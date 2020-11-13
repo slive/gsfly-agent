@@ -68,7 +68,13 @@ func NewAgServer(parent interface{}, serverConf IAgServerConf, extension IExtens
 }
 
 func (server *AgServer) Listen() error {
-	err := server.extension.OnServerListen(server)
+	err := server.extension.BeforeServerListen(server)
+	defer func() {
+		if err == nil {
+			// 成功后的操作
+			server.extension.AfterServerListen(server)
+		}
+	}()
 	if err == nil {
 		err = server.ServerListener.Listen()
 		if err == nil {
@@ -192,8 +198,9 @@ func (ags *AgServer) locationUpstream(agentCtx gch.IChHandleContext) {
 		// 第一次获取到upstream，要构建channelPeer，然后对agentChannel和dstChannel进行关联
 		ups.InitChannelPeer(agentCtx, params)
 		ret := agentCtx.GetRet()
-		logx.Info("select ok:", ret)
-		if ret != nil {
+		isOk := (ret != nil)
+		logx.Info("select isok:", isOk)
+		if isOk {
 			// TODO 一个agent可能有多个upstream情况
 			agentChannel.AddAttach(Upstream_Attach_key, ups)
 			return
