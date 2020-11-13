@@ -207,10 +207,16 @@ func initUpstreamConfs(config map[string]string) []agent.IUpstreamConf {
 						dstSubrotocol := upstreamMap[dstSubprotocolKey]
 						delete(upstreamMap, dstSubprotocolKey)
 						dstClientConf = socket.NewWsClientConf(dstIp, dstPort, dstScheme, dstPath, dstSubrotocol)
+					} else if network == channel.NETWORK_KCP.String() {
+						dstClientConf = socket.NewKcpClientConf(dstIp, dstPort)
+					} else if network == channel.NETWORK_TCP.String() {
+						dstClientConf = socket.NewTcpClientConf(dstIp, dstPort)
+					} else if network == channel.NETWORK_UDP.String() {
+						dstClientConf = socket.NewUdpClientConf(dstIp, dstPort)
 					} else {
-						logx.Panic("dstclient network is nil, key:", dstNetworkKey)
+						dstClientConf = socket.NewClientConf(dstIp, dstPort, channel.ToNetwork(network))
 					}
-
+					logx.Info("dstclient networkkey:", dstNetworkKey)
 					logx.Info("dstClientConf:", dstClientConf)
 					if dstClientConf != nil {
 						if dstClientConfs == nil {
@@ -335,9 +341,7 @@ func initServerConf(config map[string]string, agentId string) []socket.IServerCo
 			serverConf.SetId(fmt.Sprintf("%v.%v", agentId, index))
 			sconfs = append(sconfs, serverConf)
 		}
-
 	}
-
 	return sconfs
 }
 
