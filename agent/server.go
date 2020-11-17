@@ -199,7 +199,7 @@ func (ags *AgServer) locationUpstream(agentCtx gch.IChHandleContext) {
 		ups.InitChannelPeer(agentCtx, params)
 		ret := agentCtx.GetRet()
 		isOk := (ret != nil)
-		logx.Info("select isok:", isOk)
+		logx.Info("select ret:", isOk)
 		if isOk {
 			// TODO 一个agent可能有多个upstream情况
 			agentChannel.AddAttach(Upstream_Attach_key, ups)
@@ -207,7 +207,7 @@ func (ags *AgServer) locationUpstream(agentCtx gch.IChHandleContext) {
 		}
 	}
 
-	errMs := "select DstChannel error."
+	errMs := "select dstchannel error."
 	logx.Error(errMs, ups)
 	agentCtx.SetError(common.NewError2(gch.ERR_MSG, errMs))
 	return

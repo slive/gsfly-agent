@@ -463,7 +463,7 @@ var key_ch_writeBufSize = key_prefix_agent + "channel.writeBufSize"
 var key_ch_closeRevFailTime = key_prefix_agent + "channel.closeRevFailTime"
 
 func initChannelConf(config map[string]string) *channel.ChannelConf {
-	defChConf := channel.NewDefChannelConf(channel.NETWORK_WS)
+	defChConf := channel.NewDefChannelConf(channel.NETWORK_UNKNOWN)
 	readBufSize := config[key_ch_readBufSize]
 	if len(readBufSize) > 0 {
 		retInt, err := strconv.ParseInt(readBufSize, 10, 32)
@@ -483,7 +483,7 @@ func initChannelConf(config map[string]string) *channel.ChannelConf {
 			logx.Info("error:", err)
 		}
 	}
-	readTimeout := config[key_prefix_agent+"."+key_ch_readTimeout]
+	readTimeout := config[key_ch_readTimeout]
 	if len(readTimeout) > 0 {
 		retInt, err := strconv.ParseInt(readTimeout, 10, 32)
 		if err == nil {
