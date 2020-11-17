@@ -49,7 +49,7 @@ func InitServiceConf(config map[string]string) []agent.IServiceConf {
 
 	locations := initLocations(config)
 
-	serverConfs := initServerConf(config, agentId)
+	serverConfs := initServerConf(config, agentId, channelConf)
 	if len(serverConfs) <= 0 {
 		logx.Panic("serverconf init is nil.")
 	}
@@ -257,7 +257,7 @@ var serverWsKey = "agent.server.ws"
 var serverWsPathKey = "agent.server.path"
 var serverWsSubKey = "agent.server.subprotocol"
 
-func initServerConf(config map[string]string, agentId string) []socket.IServerConf {
+func initServerConf(config map[string]string, agentId string, defChannConf channel.IChannelConf) []socket.IServerConf {
 
 	itemConfs := make([]serverItemConf, 0)
 	network := config[serverNetworkKey]
@@ -339,6 +339,7 @@ func initServerConf(config map[string]string, agentId string) []socket.IServerCo
 		}
 		if serverConf != nil {
 			serverConf.SetId(fmt.Sprintf("%v.%v", agentId, index))
+			serverConf.CopyChConf(defChannConf)
 			sconfs = append(sconfs, serverConf)
 		}
 	}
