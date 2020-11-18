@@ -29,7 +29,7 @@ type IExtension interface {
 	GetLocationPattern(ctx gch.IChHandleContext) (localPattern string, params map[string]interface{})
 
 	// CreateUpstream 实现不同的Upstream，如自定义的upstream
-	CreateUpstream(upsConf IUpstreamConf, extension IExtension) IUpstream
+	CreateUpstream(upsConf IUpstreamConf) IUpstream
 
 	// BeforeServerListen 在ServerListen前操作，如果报错，则无法进行ServerListen操作
 	BeforeServerListen(server IAgServer) error
@@ -122,19 +122,20 @@ func (e *Extension) GetLocationPattern(ctx gch.IChHandleContext) (localPattern s
 }
 
 // CreateUpstream 实现不同的Upstream，如自定义的upstream
-func (e *Extension) CreateUpstream(upsConf IUpstreamConf, extension IExtension) IUpstream {
+func (e *Extension) CreateUpstream(upsConf IUpstreamConf) IUpstream {
 	// 不同的upstreamtype进行不同的处理
 	upsType := upsConf.GetUpstreamType()
 	var ups IUpstream
 	if upsType == UPSTREAM_PROXY {
 		proxyConf, ok := upsConf.(IProxyConf)
 		if ok {
-			ups = NewProxy(e.GetParent(), proxyConf, extension)
+			ups = NewProxy(e.GetParent(), proxyConf, e)
 		} else {
-			panic("upstream type is invalid")
+			panic("upstream conf is invalid.")
 		}
 	} else {
 		// TODO
+		panic("upstream type is invalid.")
 	}
 	return ups
 }
