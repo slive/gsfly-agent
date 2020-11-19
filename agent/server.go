@@ -109,15 +109,24 @@ const (
 	Upstream_Attach_key = "upstream"
 )
 
+// onAgentChannelActiveHandle 当agentChannel注册时，路由dstClientChannel等操作
 func (ags *AgServer) onAgentChannelActiveHandle(ctx gch.IChHandleContext) {
-	ags.locationUpstream(ctx)
-	err := ctx.GetError()
+	chId := ctx.GetChannel().GetId()
+	err := ags.extension.CheckAgentChannelActive(ctx)
 	if err != nil {
+		logx.Error("check active, chId:%v, error:%v", chId, err)
+		gch.NotifyErrorHandle(ctx, err, gch.ERR_ACTIVE)
+		return
+	}
+	ags.locationUpstream(ctx)
+	err = ctx.GetError()
+	if err != nil {
+		logx.Error("location chId:%v, error:%v", chId, err)
 		gch.NotifyErrorHandle(ctx, err, gch.ERR_ACTIVE)
 	}
 }
 
-// onAgentChannelInActiveHandle 当serverChannel关闭时，触发clientchannel关闭
+// onAgentChannelInActiveHandle 当agentChannel关闭时，触发dstClientChannel关闭
 func (ags *AgServer) onAgentChannelInActiveHandle(ctx gch.IChHandleContext) {
 	agentChannel := ctx.GetChannel()
 	agentChId := agentChannel.GetId()

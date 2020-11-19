@@ -4,10 +4,8 @@ state agentservice{
     clientchannel-[#green]-->agentserver :远程调用
     agentserver->agentserver :建立agent端的channel
     agentserver -> agentchannel:启用agentchannel
-    agentchannel --> filter:可选
     state upstream{
         agentchannel --> upstreamlocation
-        filter -->upstreamlocation:filter通过
         upstreamlocation--> upstreamlocation :定位到dst地址[可嵌入认证和鉴权]
         upstreamlocation --> loadbalance :负载均衡策略
         loadbalance-->dstconf :负载均衡获取dst配置[可嵌入认证和鉴权]

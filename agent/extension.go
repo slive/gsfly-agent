@@ -25,6 +25,9 @@ type IExtension interface {
 	// toChannel 到目标channel发送
 	Transfer(fromCtx gch.IChHandleContext, toChannel gch.IChannel)
 
+	// CheckAgentChannelActive 当agentChannel激活时的操作，检测出错，则停止后面的操作
+	CheckAgentChannelActive(ctx gch.IChHandleContext) error
+
 	// GetLocationPattern 获取location匹配路径和对应的参数，然后可通过localPattern查找到对应已初始化的IUpstream
 	GetLocationPattern(ctx gch.IChHandleContext) (localPattern string, params map[string]interface{})
 
@@ -151,6 +154,11 @@ func (e *Extension) BeforeServerListen(server IAgServer) error {
 func (e *Extension) AfterServerListen(server IAgServer) {
 	// 空实现
 	logx.Info("after serverlistener, nothing...")
+}
+
+// CheckAgentChannelActive 当agentChannel激活时的操作，检测出错，则停止后面的操作
+func (e *Extension) CheckAgentChannelActive(ctx gch.IChHandleContext) error {
+	return nil
 }
 
 // GetAgentMsgHandlers 获取agent msg的操作，默认实现
