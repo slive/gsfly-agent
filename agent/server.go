@@ -115,14 +115,14 @@ func (ags *AgServer) onAgentChannelActiveHandle(ctx gch.IChHandleContext) {
 	extension := ags.extension
 	err := extension.BeforeAgentChannelActive(ctx)
 	if err != nil {
-		logx.Error("check active, chId:%v, error:%v", chId, err)
+		logx.Errorf("check active, chId:%v, error:%v", chId, err)
 		gch.NotifyErrorHandle(ctx, err, gch.ERR_ACTIVE)
 		return
 	}
 	ags.locationUpstream(ctx)
 	err = ctx.GetError()
 	if err != nil {
-		logx.Error("location chId:%v, error:%v", chId, err)
+		logx.Errorf("location chId:%v, error:%v", chId, err)
 		gch.NotifyErrorHandle(ctx, err, gch.ERR_ACTIVE)
 	} else {
 		// 最后的处理
