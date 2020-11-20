@@ -112,7 +112,8 @@ const (
 // onAgentChannelActiveHandle 当agentChannel注册时，路由dstClientChannel等操作
 func (ags *AgServer) onAgentChannelActiveHandle(ctx gch.IChHandleContext) {
 	chId := ctx.GetChannel().GetId()
-	err := ags.extension.CheckAgentChannelActive(ctx)
+	extension := ags.extension
+	err := extension.BeforeAgentChannelActive(ctx)
 	if err != nil {
 		logx.Error("check active, chId:%v, error:%v", chId, err)
 		gch.NotifyErrorHandle(ctx, err, gch.ERR_ACTIVE)
@@ -123,6 +124,9 @@ func (ags *AgServer) onAgentChannelActiveHandle(ctx gch.IChHandleContext) {
 	if err != nil {
 		logx.Error("location chId:%v, error:%v", chId, err)
 		gch.NotifyErrorHandle(ctx, err, gch.ERR_ACTIVE)
+	} else {
+		// 最后的处理
+		extension.AfterAgentChannelActive(ctx)
 	}
 }
 
