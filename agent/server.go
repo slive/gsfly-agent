@@ -17,7 +17,7 @@ type IMsgHandler interface {
 }
 
 type IAgServer interface {
-	socket.IServerListener
+	socket.IServerSocket
 
 	// AddMsgHandler 添加处理消息handler，TODO 做排序？
 	AddMsgHandler(handler ...IMsgHandler)
@@ -32,7 +32,7 @@ type IAgServer interface {
 
 // AgServer 代理服务器
 type AgServer struct {
-	socket.ServerListener
+	socket.ServerSocket
 
 	serverConf IAgServerConf
 
@@ -63,7 +63,7 @@ func NewAgServer(parent interface{}, serverConf IAgServerConf, extension IExtens
 	}
 
 	sConf := serverConf.GetServerConf()
-	s.ServerListener = *socket.NewServerListener(parent, sConf, handle)
+	s.ServerSocket = *socket.NewServerSocket(parent, sConf, handle)
 	return s
 }
 
@@ -76,7 +76,7 @@ func (server *AgServer) Listen() error {
 		}
 	}()
 	if err == nil {
-		err = server.ServerListener.Listen()
+		err = server.ServerSocket.Listen()
 		if err == nil {
 			server.locationHandle = defaultLocationHandle
 		}
