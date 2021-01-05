@@ -40,7 +40,7 @@ func InitServiceConf(config map[string]string) []agent.IServiceConf {
 	channelConf := initChannelConf(config)
 	logx.Info("channelConf:", channelConf)
 
-	channel.InitChannelConfs(readPoolConf, channelConf)
+	channel.InitDefChannelConf(readPoolConf, channelConf)
 
 	agentId := config[serverIdKey]
 	if len(agentId) <= 0 {
@@ -76,11 +76,11 @@ func initLogConf(logFile string, logDir string, logLevel string) {
 			Level:          logLevel,
 			MaxRemainCount: 10,
 		}
+		logx.InitLogger(logConf)
+		logx.Info("logConf:", logConf)
 	} else {
-		logConf = logx.NewDefaultLogConf()
+		logx.InitDefLogger()
 	}
-	logx.InitLogger(logConf)
-	logx.Info("logConf:", logConf)
 }
 
 var readPoolKey = "agent.readpool.maxCpuSize"
@@ -314,7 +314,7 @@ func initServerConf(config map[string]string, agentId string, defChannConf chann
 
 	sconfs := make([]socket.IServerConf, 0)
 	var scheme string
-	var wsConfs []socket.IListenConf
+	var wsConfs []socket.IServerChildConf
 	for index, sc := range itemConfs {
 		// 共用部分
 		serverIp := sc.GetIp()
@@ -380,10 +380,10 @@ type serverItemConf struct {
 	maxChannelSize int
 }
 
-func initServerWsConf(config map[string]string) (string, []socket.IListenConf) {
+func initServerWsConf(config map[string]string) (string, []socket.IServerChildConf) {
 	scheme := config[serverWsSchemeKey]
 	index := 0
-	wsConfs := make([]socket.IListenConf, 0)
+	wsConfs := make([]socket.IServerChildConf, 0)
 	for {
 		pathKey := fmt.Sprintf(serverWsKey+".%v.path", index)
 		subproKey := fmt.Sprintf(serverWsKey+".%v.subprotocol", index)
@@ -394,7 +394,7 @@ func initServerWsConf(config map[string]string) (string, []socket.IListenConf) {
 		subpro := config[subproKey]
 		logx.Infof("%v:%v", pathKey, path)
 		logx.Infof("%v:%v", subproKey, subpro)
-		wsConf := socket.NewListenConf(channel.NETWORK_WS, path)
+		wsConf := socket.NewServerChildConf(channel.NETWORK_WS, path)
 		wsConf.AddAttach(socket.WS_SUBPROTOCOL_KEY, subpro)
 		wsConfs = append(wsConfs, wsConf)
 		index++
@@ -408,7 +408,7 @@ func initServerWsConf(config map[string]string) (string, []socket.IListenConf) {
 		subpro := config[subproKey]
 		logx.Infof("%v:%v", pathKey, path)
 		logx.Infof("%v:%v", subproKey, subpro)
-		wsConf := socket.NewListenConf(channel.NETWORK_WS, path)
+		wsConf := socket.NewServerChildConf(channel.NETWORK_WS, path)
 		wsConf.AddAttach(socket.WS_SUBPROTOCOL_KEY, subpro)
 		wsConfs = append(wsConfs, wsConf)
 	}
