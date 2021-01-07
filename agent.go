@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"syscall"
 )
 
 const (
@@ -87,7 +88,7 @@ func Run(extension agent.IExtension, cfPath string) {
 	}
 
 	o := make(chan os.Signal, 1)
-	signal.Notify(o)
+	signal.Notify(o, os.Kill, os.Interrupt, syscall.SIGABRT, syscall.SIGTERM)
 	select {
 	case s := <-o:
 		logx.Info("stop...., signal:", s)
