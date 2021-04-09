@@ -6,10 +6,10 @@ package config
 
 import (
 	"fmt"
-	"github.com/Slive/gsfly-agent/agent"
-	"github.com/Slive/gsfly/channel"
-	logx "github.com/Slive/gsfly/logger"
-	"github.com/Slive/gsfly/socket"
+	"github.com/slive/gsfly-agent/agent"
+	"github.com/slive/gsfly/channel"
+	logx "github.com/slive/gsfly/logger"
+	"github.com/slive/gsfly/socket"
 	"math/rand"
 	"runtime"
 	"strconv"

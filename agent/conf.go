@@ -5,9 +5,9 @@
 package agent
 
 import (
-	"github.com/Slive/gsfly/common"
-	logx "github.com/Slive/gsfly/logger"
-	"github.com/Slive/gsfly/socket"
+	"github.com/slive/gsfly/common"
+	logx "github.com/slive/gsfly/logger"
+	"github.com/slive/gsfly/socket"
 	"sync"
 )
 

@@ -6,10 +6,10 @@ package agent
 
 import (
 	"flag"
-	"github.com/Slive/gsfly-agent/agent"
-	config "github.com/Slive/gsfly-agent/config"
-	logx "github.com/Slive/gsfly/logger"
-	"github.com/Slive/gsfly/util"
+	"github.com/slive/gsfly-agent/agent"
+	config "github.com/slive/gsfly-agent/config"
+	logx "github.com/slive/gsfly/logger"
+	"github.com/slive/gsfly/util"
 	"os"
 	"os/signal"
 	"strings"

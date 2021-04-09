@@ -5,9 +5,9 @@
 package agent
 
 import (
-	"github.com/Slive/gsfly/channel"
-	logx "github.com/Slive/gsfly/logger"
-	"github.com/Slive/gsfly/socket"
+	"github.com/slive/gsfly/channel"
+	logx "github.com/slive/gsfly/logger"
+	"github.com/slive/gsfly/socket"
 	"github.com/emirpasic/gods/maps/hashmap"
 )
 

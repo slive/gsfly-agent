@@ -7,8 +7,8 @@ package agent
 
 import (
 	"errors"
-	"github.com/Slive/gsfly/channel"
-	logx "github.com/Slive/gsfly/logger"
+	"github.com/slive/gsfly/channel"
+	logx "github.com/slive/gsfly/logger"
 )
 
 // IService 代理服务

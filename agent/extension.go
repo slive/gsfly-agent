@@ -9,10 +9,10 @@
 package agent
 
 import (
-	gch "github.com/Slive/gsfly/channel"
-	"github.com/Slive/gsfly/channel/tcpx"
-	"github.com/Slive/gsfly/common"
-	logx "github.com/Slive/gsfly/logger"
+	gch "github.com/slive/gsfly/channel"
+	"github.com/slive/gsfly/channel/tcpx"
+	"github.com/slive/gsfly/common"
+	logx "github.com/slive/gsfly/logger"
 	"github.com/gorilla/websocket"
 )
 
