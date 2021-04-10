@@ -47,8 +47,8 @@ func (proxy *Proxy) InitChannelPeer(agentCtx channel.IChHandleContext, params ma
 
 	// 初始化DstClientConn
 	handle := channel.NewDefChHandle(proxy.onDstChannelReadHandle)
-	handle.SetOnActive(proxy.onDstChannelActiveHandle)
-	handle.SetOnInActive(proxy.onDstChannelInActiveHandle)
+	handle.SetOnConnect(proxy.onDstChannelActiveHandle)
+	handle.SetOnRelease(proxy.onDstChannelInActiveHandle)
 	clientConn := socket.NewClientSocket(proxy, dstClientConf, handle, params)
 	err := clientConn.Dial()
 	agentCh := agentCtx.GetChannel()
@@ -143,7 +143,7 @@ func (proxy *Proxy) ReleaseOnAgentChannel(agentCtx channel.IChHandleContext) {
 			dstChId := dstChannel.GetId()
 			proxy.GetDstChannels().Remove(dstChId)
 			// 释放dstchannel资源
-			dstChannel.Close()
+			dstChannel.Release()
 			dstChannel.GetParent()
 		}
 	}
@@ -159,7 +159,7 @@ func (proxy *Proxy) ReleaseOnDstChannel(dstCtx channel.IChHandleContext) {
 		proxy.GetChannelPeers().Remove(dstChId)
 		proxy.GetDstChannels().Remove(dstChId)
 		agentCh := chPeer.(IChannelPeer).GetAgentChannel()
-		agentCh.Close()
+		agentCh.Release()
 	}
 }
 

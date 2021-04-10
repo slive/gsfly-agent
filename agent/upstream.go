@@ -151,7 +151,7 @@ func (ups *Upstream) ReleaseChannelPeers() {
 	dstChPool := ups.GetDstChannels()
 	dstVals := dstChPool.Values()
 	for _, val := range dstVals {
-		val.(channel.IChannel).Close()
+		val.(channel.IChannel).Release()
 	}
 	dstChPool.Clear()
 }

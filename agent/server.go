@@ -52,8 +52,8 @@ func NewAgServer(parent interface{}, serverConf IAgServerConf, extension IExtens
 
 	// 初始化channel相关handler
 	handle := gch.NewDefChHandle(s.onAgentChannelReadHandle)
-	handle.SetOnActive(s.onAgentChannelActiveHandle)
-	handle.SetOnInActive(s.onAgentChannelInActiveHandle)
+	handle.SetOnConnect(s.onAgentChannelActiveHandle)
+	handle.SetOnRelease(s.onAgentChannelInActiveHandle)
 
 	// 扩展点
 	if extension == nil {

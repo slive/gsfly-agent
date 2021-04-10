@@ -70,7 +70,6 @@ func Run(extension agent.IExtension, cfPath string) {
 	for index, serviceConf := range serviceConfs {
 		service := agent.NewService(serviceConf, extension)
 		extension.SetExtConf(properties)
-
 		// 启动
 		err := service.Start()
 		if err != nil {
